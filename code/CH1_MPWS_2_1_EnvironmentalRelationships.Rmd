@@ -1,0 +1,562 @@
+---
+title: "Dissertation - Phoenix Biodiversity Chapter - Model Fitting"
+author: "Jeffrey Haight"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r include = FALSE}
+rm(list=ls())
+gc()
+
+
+library(jagsUI)
+library(rjags)
+#library(runjags)
+library(abind)
+
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(beepr)
+library(ggcorrplot)
+library(GGally)
+
+
+```
+
+# Import Data
+```{r}
+load("./data/4_input/ModelInputData_DCM.RData")
+
+
+# Three seasons of data from the Metro Phoenix Wildlife Study
+  str(y)        # species observations
+  str(ysum)     # species observations, summarized across survey occasions
+  n.site        # number of sites = dim(y)[1]
+  n.survey      # number of survey occasions = dim(y)[2]
+  n.season      # number of seasons = dim(y)[3]
+  n.spp         # number of species = dim(y)[4]
+  str(K.survey) # number of occasions in which each site was sampled in each season
+  names.common  # names of the species sampled
+
+# Site occupancy and detection covariates
+  str(K)        # sampling effort = number of days each site was surveyed
+  
+  # standardized versions of seasonally-varying covariates
+  # these were the only ones that were separate objects, because they were standardized by season
+  str(K.std)
+  str(ndvi.1km.std)
+  str(ndvihet.1km.std)
+  
+# Species covariates
+  str(data.spp)
+  
+```
+# Static Landscape Patterns
+Examining which variables are associated with urbanization
+
+
+##### Urbanization vs. Veg Cover
+Unlike other systems, more development does not necessarily mean less vegetation cover. If anything, the relationships between vegetation cover and urbanization was positive, based on the NAIP land cover data
+```{r}
+cor(data.site$urb100m_15, data.site$veg100m_15)
+cor(data.site$urb1km_15, data.site$veg1km_15)
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = urb100m_15, y = veg1km_15), fill = "green4", col = "green4",
+              method = "lm")+
+  geom_point(aes(x = urb1km_15, y = veg1km_15), col = "green4")
+```
+
+##### Urban vs. Heterogeneity (Patch Diversity)
+This is The hump-shaped relationship is noticeably more prominent at the 5 km scale
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(imp100m, imp1km, imp5km, 
+                  sdhi100m, sdhi1km, sdhi5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp100m, y = sdhi100m), fill = "green2", col = "green2",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = sdhi100m), col = "green2") +
+  coord_cartesian(xlim = c(0, 80), ylim = c(0, 1.5)) +
+  labs(x = "Impervious Surface %", y = "Landscape Heterogeneity \n(Patch Diversity)")
+
+ggplot(data = data.site)+
+  theme_classic()+
+  stat_smooth(aes(x = imp1km, y = sdhi1km), fill = "green3", col = "green3",
+              method = "lm", formula = y ~ x + I(x^2))+
+  geom_point(aes(x = imp1km, y = sdhi1km), col = "green3") +
+  coord_cartesian(xlim = c(0, 80), ylim = c(0, 1.5)) +
+  labs(x = "Impervious Surface %", y = "Landscape Heterogeneity \n(Patch Diversity)")
+
+ggplot(data = data.site)+
+  theme_classic()+
+  stat_smooth(aes(x = imp5km, y = sdhi5km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2))+
+  geom_point(aes(x = imp5km, y = sdhi5km), col = "green4") +
+  coord_cartesian(xlim = c(0, 80), ylim = c(0, 1.5)) +
+  labs(x = "Impervious Surface %", y = "Landscape Heterogeneity \n(Patch Diversity)")
+
+
+```
+
+
+
+# Quadratic Urbanization
+Examining which variables peak at moderate levels of urbanization. We would say that any variable that is negatively correlated with quadratic urbanization is one that peaks at moderate urbanization.  
+
+### Urban^2 vs. Heterogeneity
+This is largely to confirm what we already know from when we assessed collinearity among landscape metrics: patch diversity is negatively correlated with quadratic urbanization, i.e. it peaks in moderately urbanized (at least at the 1 km scale)
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(impquad100m, impquad1km, impquad5km, 
+                  sdhi100m, sdhi1km, sdhi5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = impquad100m, y = sdhi100m), fill = "green2", col = "green2",
+              method = "lm") +
+  geom_point(aes(x = impquad100m, y = sdhi100m), col = "green2")+
+  stat_smooth(aes(x = impquad1km, y = sdhi1km), fill = "green3", col = "green3",
+              method = "lm") +
+  geom_point(aes(x = impquad1km, y = sdhi1km), col = "green3")+
+  stat_smooth(aes(x = impquad5km, y = sdhi5km), fill = "green4", col = "green4",
+              method = "lm") +
+  geom_point(aes(x = impquad5km, y = sdhi5km), col = "green4") +
+  coord_cartesian(xlim = c(0, 4.5), ylim = c(0, 1.5)) +
+  labs(x = "Quadratic Urbanization", y = "Patch Diversity")
+```
+
+
+### Urban^2 vs. Veg Cover
+```{r}
+cor(data.site$impquad100m, data.site$veg100m_15)
+cor(data.site$imp1km, data.site$veg1km_15)
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp100m, y = veg1km_15), fill = "green4", col = "green4",
+              method = "lm")+
+  geom_point(aes(x = imp100m, y = veg1km_15), col = "green4")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp1km, y = veg1km_15), fill = "green4", col = "green4",
+              method = "lm")+
+  geom_point(aes(x = imp1km, y = veg1km_15), col = "green4")
+
+
+```
+
+### Urban^2 vs. Veg Greenness
+Overall, not much correlation here
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(impquad100m, impquad1km, impquad5km, 
+                  ndvi_wd100m, ndvi_wd1km, ndvi_wd5km, 
+                  ndvi_ww100m, ndvi_ww1km, ndvi_ww5km, 
+                  ndvi_cw100m, ndvi_cw1km, ndvi_cw5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = impquad5km, y = ndvi_wd100m), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_wd100m), col = "green4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_ww100m), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_ww100m), col = "red4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_cw100m), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_cw100m), col = "blue4") +
+  scale_y_continuous(limits = c(0.06, 0.16))
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = impquad5km, y = ndvi_wd1km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_wd1km), col = "green4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_ww1km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_ww1km), col = "red4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_cw1km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_cw1km), col = "blue4") +
+  scale_y_continuous(limits = c(0.06, 0.16))
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = impquad5km, y = ndvi_wd5km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_wd5km), col = "green4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_ww5km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_ww5km), col = "red4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_cw5km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_cw5km), col = "blue4") +
+  scale_y_continuous(limits = c(0.06, 0.16))
+```
+
+
+
+### Urban^2 vs. Veg Variance
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(impquad100m, impquad1km, impquad5km, 
+                  ndvi_sd_wd100m, ndvi_sd_wd1km, ndvi_sd_wd5km, 
+                  ndvi_sd_ww100m, ndvi_sd_ww1km, ndvi_sd_ww5km, 
+                  ndvi_sd_cw100m, ndvi_sd_cw1km, ndvi_sd_cw5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+
+# heterogeneity is only moderately correlated with quadratic urbanization at the 5 km scale
+
+# 5 km
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = impquad5km, y = ndvi_sd_wd5km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_sd_wd5km), col = "green4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_sd_ww5km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_sd_ww5km), col = "red4")+
+  stat_smooth(aes(x = impquad5km, y = ndvi_sd_cw5km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = impquad5km, y = ndvi_sd_cw5km), col = "blue4")+
+  scale_y_continuous(limits = c(-0.01, 0.11))
+```
+
+
+
+```{r}
+ggplot(data.site) +
+  theme_classic()+
+  geom_point(aes(x = ndvi_ww1km, y = ndvi_cw1km)) +
+  geom_abline(intercept = 0, slope = 1) 
+
+# warm-dry (spring/summer) is the season with the highest NDVI, followed by cool-wet (winter), then warm-wet (monsoon)
+
+plot_ly(x = data.site$ndvi_wd1km, y = data.site$ndvi_ww1km, z = data.site$ndvi_cw1km, type="scatter3d", mode="markers", color=data.site$imp1km)
+```
+
+```{r}
+ggpairs(data.cor, title="correlogram with ggpairs()",
+                #columnLabels = c("Impervious", "NDVI", "Desert Dist", "Ag Dist", "Area Ag", "Wetland Dist"),
+                #mapping = ggplot2::aes(color = "blue"),
+                method = "pearson"
+         ) + theme_bw() + scale_color_manual("blue")
+```
+
+
+# Dynamic (Seasonal) Patterns
+### Climate Summary Statistics
+```{r climate summary stats}
+print("Warm-Dry")
+mean(data.site$tmin_wd_DM)
+mean(data.site$tmax_wd_DM)
+mean(data.site$ppt_wd_DM)
+
+print("Warm-Wet")
+mean(data.site$tmin_ww_DM)
+mean(data.site$tmax_ww_DM)
+mean(data.site$ppt_ww_DM)
+
+print("Cool-Wet")
+mean(data.site$tmax_cw_DM)
+mean(data.site$tmin_cw_DM)
+mean(data.site$ppt_cw_DM)
+
+```
+
+### Climate vs. Urbanization
+This is more to confirm the big differences among the seasons than it is to show differences across sites, although temperature does show a very strong correlation with impervious surface. Precipitation
+
+##### Daily Minimum Temperature
+```{r temp minimum}
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp1km, y = tmin_wd_DM), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmin_wd_DM), col = "green4")+
+  stat_smooth(aes(x = imp1km, y = tmin_ww_DM), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmin_ww_DM), col = "red4")+
+  stat_smooth(aes(x = imp1km, y = tmin_cw_DM), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmin_cw_DM), col = "blue4") +
+  labs(x = "Urbanization", y = "Temperature, Daily Mean Minimum")
+
+#cor(data.site$imp100m, data.site$tmin_wd_DM)
+#cor(data.site$imp100m, data.site$tmin_ww_DM)
+#cor(data.site$imp100m, data.site$tmin_cw_DM)
+
+cor(data.site$imp1km, data.site$tmin_wd_DM)
+cor(data.site$imp1km, data.site$tmin_ww_DM)
+cor(data.site$imp1km, data.site$tmin_cw_DM)
+
+#cor(data.site$imp5km, data.site$tmin_wd_DM)
+#cor(data.site$imp5km, data.site$tmin_ww_DM)
+#cor(data.site$imp5km, data.site$tmin_cw_DM)
+```
+
+##### Daily Maximum Temperature
+```{r temp maximum}
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp1km, y = tmax_wd_DM), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmax_wd_DM), col = "green4")+
+  stat_smooth(aes(x = imp1km, y = tmax_ww_DM), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmax_ww_DM), col = "red4")+
+  stat_smooth(aes(x = imp1km, y = tmax_cw_DM), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = tmax_cw_DM), col = "blue4") +
+  labs(x = "Urbanization", y = "Temperature, Daily Mean Maximum")
+
+cor(data.site$imp1km, data.site$tmax_wd_DM)
+cor(data.site$imp1km, data.site$tmax_ww_DM)
+cor(data.site$imp1km, data.site$tmax_cw_DM)
+```
+
+##### Precipitation
+```{r precipitation}
+# unsurprisingly, not much difference in precip across sites, but big differences among seasons
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp1km, y = ppt_wd_DM), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ppt_wd_DM), col = "green4")+
+  stat_smooth(aes(x = imp1km, y = ppt_ww_DM), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ppt_ww_DM), col = "red4")+
+  stat_smooth(aes(x = imp1km, y = ppt_cw_DM), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ppt_cw_DM), col = "blue4") +
+  labs(x = "Urbanization", y = "Precipitation (mm)")
+
+cor(data.site$imp1km, data.site$ppt_wd_DM)
+cor(data.site$imp1km, data.site$ppt_ww_DM)
+cor(data.site$imp1km, data.site$ppt_cw_DM)
+
+
+```
+### Vegetation vs. Urbanization
+
+
+##### Veg Greenness vs. Urbanization
+Here, we see that veg
+
+One thing that's clear here is that the relationships with urbanization become more precisely linear when NDVI is averaged at larger scales
+
+
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(imp100m, imp1km, imp5km, 
+                  ndvi_wd100m, ndvi_wd1km, ndvi_wd5km, 
+                  ndvi_ww100m, ndvi_ww1km, ndvi_ww5km, 
+                  ndvi_cw100m, ndvi_cw1km, ndvi_cw5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+# quad urbanization at 100m and 1 km scales is somewhat correlated (>0.3) with a number of NDVI variables
+# 
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp100m, y = ndvi_wd100m), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_wd100m), col = "green4")+
+  stat_smooth(aes(x = imp100m, y = ndvi_ww100m), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_ww100m), col = "red4")+
+  stat_smooth(aes(x = imp100m, y = ndvi_cw100m), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_cw100m), col = "blue4") +
+  coord_cartesian(ylim = c(0.06, 0.22))+
+  labs(x = "Impervious Surface % (100 m)", y = "Vegetation Greenness (NDVI)")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp1km, y = ndvi_wd1km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ndvi_wd1km), col = "green4")+
+  stat_smooth(aes(x = imp1km, y = ndvi_ww1km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ndvi_ww1km), col = "red4")+
+  stat_smooth(aes(x = imp1km, y = ndvi_cw1km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp1km, y = ndvi_cw1km), col = "blue4") +
+  coord_cartesian(ylim = c(0.06, 0.22))+
+  labs(x = "Impervious Surface % (1 km)", y = "Vegetation Greenness (NDVI)")
+
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp5km, y = ndvi_wd5km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_wd5km), col = "green4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_ww5km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_ww5km), col = "red4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_cw5km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_cw5km), col = "blue4") +
+  scale_y_continuous(limits = c(0.06, 0.22))+
+  labs(x = "Impervious Surface % (5 km)", y = "Vegetation Greenness (NDVI)")
+
+
+# how about the relationships between veg cover and greenness?
+# note that vegetation cover is based on 2015 NAIP imagery, whereas the NDVI is from the seasons themselves
+# so be careful in drawing conclusions
+cor(data.site$veg1km_15, data.site$ndvi_wd1km)
+cor(data.site$veg1km_15, data.site$ndvi_ww1km)
+cor(data.site$veg1km_15, data.site$ndvi_cw1km)
+# innnnteresting
+# The link between cover and greenness is strongest in least productive season (warm-wet),
+# and practically non-existent in the most productive season (cool-wet)
+# Combined with the fact that cover was generally greater at more urban sites,
+# this would suggest that green-up occurs in the least urban sites, where NDVI seasonally varies most
+# Sites with more vegetation cover (i.e., urban sites) don't green up as much,
+# but sites with less vegetation cover (i.e. natural sites) green up quite a bit
+
+# Overall, we should consider that cover != greenness
+# But, we can still use greenness as a proxy for resources, 
+# especially since greenness was moderately correlated with natural water availability (precipitation)
+
+
+```
+##### Veg Variance vs. Urbanization
+Here we can see that there is generally greater variation in vegetation greenness at more urbanized sites (p > 0.3), though it may decrease again at the most urbanized sites (which makes sense). Important to note how there is also not many 
+```{r}
+data.cor <- data.site %>% 
+  dplyr::select(c(imp100m, imp1km, imp5km, 
+                  ndvi_sd_wd100m, ndvi_sd_wd1km, ndvi_sd_wd5km, 
+                  ndvi_sd_ww100m, ndvi_sd_ww1km, ndvi_sd_ww5km, 
+                  ndvi_sd_cw100m, ndvi_sd_cw1km, ndvi_sd_cw5km
+                  ))
+ggcorrplot(cor(data.cor, use = "complete.obs", method = "pearson"), 
+           #hc.order = TRUE, 
+           type = "upper",
+           lab = TRUE,
+           outline.color = "white")
+# Imperviousness and veg variance are somewhat correlated (>0.3) across most spatial scales
+# i.e. greater variation in vegetation in highly urban areas
+
+# 100 m
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp100m, y = ndvi_sd_wd100m), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_sd_wd100m), col = "green4")+
+  stat_smooth(aes(x = imp100m, y = ndvi_sd_ww100m), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_sd_ww100m), col = "red4")+
+  stat_smooth(aes(x = imp100m, y = ndvi_sd_cw100m), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp100m, y = ndvi_sd_cw100m), col = "blue4")+
+  scale_y_continuous(limits = c(-0.01, 0.11))
+
+# 1 km
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_wd1km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_wd1km), col = "green4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_ww1km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_ww1km), col = "red4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_cw1km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_cw1km), col = "blue4")+
+  scale_y_continuous(limits = c(-0.01, 0.11))
+
+# 5 km
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_wd5km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_wd5km), col = "green4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_ww5km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_ww5km), col = "red4")+
+  stat_smooth(aes(x = imp5km, y = ndvi_sd_cw5km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = imp5km, y = ndvi_sd_cw5km), col = "blue4")+
+  scale_y_continuous(limits = c(-0.01, 0.11))
+```
+
+### Climate vs. Vegetation
+While these are not the strongest correlations, vegetation is unsurprisingly greener at the sites that receive more precipitation. If we split this into the least urbanized vs. most urbanized sites, we do see that the link between precipitation and greenness is a bit stronger in the less urbanized and almost entirely decoupled in the most urban sites.
+```{r precip vs greenness}
+ggplot(data = data.site)+
+  theme_classic() +
+  stat_smooth(aes(x = ppt_wd_DM, y = ndvi_wd1km), fill = "green4", col = "green4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = ppt_wd_DM, y = ndvi_wd1km), col = "green4")+
+  stat_smooth(aes(x = ppt_ww_DM, y = ndvi_ww1km), fill = "red4", col = "red4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = ppt_ww_DM, y = ndvi_ww1km), col = "red4")+
+  stat_smooth(aes(x = ppt_cw_DM, y = ndvi_cw1km), fill = "blue4", col = "blue4",
+              method = "lm", formula = y ~ x + I(x^2)) +
+  geom_point(aes(x = ppt_cw_DM, y = ndvi_cw1km), col = "blue4") +
+  labs(x = "Precipitation (mm)", y = "Vegetation Greenness")
+
+cor(data.site$ndvi_wd1km, data.site$ppt_wd_DM)
+cor(data.site$ndvi_ww1km, data.site$ppt_ww_DM)
+cor(data.site$ndvi_cw1km, data.site$ppt_cw_DM)
+
+# out of curiousity, what if we just look at some of the urban sites?
+# Is the correlation stronger?
+data.site <- data.site %>% arrange(imp1km)
+cor(data.site[1:25,]$ndvi_wd1km, data.site[1:25,]$ppt_wd_DM)
+cor(data.site[1:25,]$ndvi_ww1km, data.site[1:25,]$ppt_ww_DM)
+cor(data.site[1:25,]$ndvi_cw1km, data.site[1:25,]$ppt_cw_DM)
+# Yes, they are
+cor(data.site[26:50,]$ndvi_wd1km, data.site[26:50,]$ppt_wd_DM)
+cor(data.site[26:50,]$ndvi_ww1km, data.site[26:50,]$ppt_ww_DM)
+cor(data.site[26:50,]$ndvi_cw1km, data.site[26:50,]$ppt_cw_DM)
+# ... and they are much lower at the highly urban sites
+
+data.site <- data.site %>% arrange(site)
+```
+
+
+
+
+# CODE GARAGE
