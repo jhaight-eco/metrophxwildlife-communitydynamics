@@ -119,7 +119,6 @@ data.site <- read.csv("~/GitHub/metrophxwildlife-communitydynamics/data/model_in
       ndvi_ww_std = (ndvi_ww1km - mean(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)))/sd(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)),
       ndvi_cw_std = (ndvi_cw1km - mean(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)))/sd(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km))
     )
-  mean(ndvi.1km.std[,1])
   mean(ndvi.1km.std[,2])
   mean(ndvi.1km.std[,3])
   
@@ -192,7 +191,7 @@ data.site <- read.csv("~/GitHub/metrophxwildlife-communitydynamics/data/model_in
 # Common names for the species
 names.common <- data.spp$name
 names.short <- dimnames(y)[[4]]  # these are the names by which the occupancy data is alphabetized
-names.short <- data.spp$name     # same thing
+names.short <- data.spp$name_short     # same thing
 
 
 data.spp %>% arrange(dietdiv)
@@ -203,17 +202,21 @@ ggplot(data.spp, aes(x = logmass, y = dietdiv)) +
   theme_bw() +
   geom_point()+
   geom_text_repel(aes(label = Species)) +
-  labs(x = "Body Mass (kg)", y = "Diet Diversity")+
+  labs(x = "log(Body Mass)", y = "Diet Diversity")+
   scale_x_continuous(trans = "log10", breaks = log10(c(0.1, 1, 10)*1000), labels = c("0.1","1", "10"))      
 ```
 ```{r summarize naive richness}
-ysum01 <- ysum
-ysum01[ysum01 > 1] <- 1
-str(ysum01)
+# get an array of 1-0-NA detections of each site X season X species
+  # ysum01 <- ysum           # approach A
+  # ysum01[ysum01 > 1] <- 1
+  ysum01 <- apply(y, MARGIN = c(1,3,4), function(x) max(x, na.rm = T)) # approach B
+  
+  str(ysum01)
 
-data.site$rich_obs_wd <- apply(ysum01[,1,], c(1), function(x) sum(x, na.rm = T))
-data.site$rich_obs_ww <- apply(ysum01[,2,], c(1), function(x) sum(x, na.rm = T))
-data.site$rich_obs_cw <- apply(ysum01[,3,], c(1), function(x) sum(x, na.rm = T))
+# calculate the richness of the species detected in each season and add it to the site covariate dataset
+  data.site$rich_obs_wd <- apply(ysum01[,1,], c(1), function(x) sum(x, na.rm = T))
+  data.site$rich_obs_ww <- apply(ysum01[,2,], c(1), function(x) sum(x, na.rm = T))
+  data.site$rich_obs_cw <- apply(ysum01[,3,], c(1), function(x) sum(x, na.rm = T))
 ```
 # Export Model Input Data
 ```{r}
@@ -225,7 +228,7 @@ save.image("~/GitHub/metrophxwildlife-communitydynamics/data/model_inputs/ModelI
 ```
 
 # Visualize Naive (Observed) Species Richness vs. Environmental Covariates
-This is mainly as a preview of the relationships that will be assessed once imperfect detection has been accounted for in the estimates of species richness. Since these are pairwise correlations, the collinearity among the covariates is not being accounted for and these should be taken with a big grain of salt. Certain relationships might not show as significant (e.g., richness vs. heterogeneity) because they are being overshadowed by the stronger relationships (e.g., richness vs. urbanization).
+This is mainly as a preview of the relationships that will be assessed once imperfect detection has been accounted for in the estimates of species richness. Since these are pairwise correlations, the collinearity among the covariates is not being accounted for and these should be taken with a big grain of salt. For instance, vegetation greenness is negatively related to urbanization in the cool-wet season. Certain relationships might not show as substantial (e.g., richness vs. heterogeneity) because they are being overshadowed by the stronger relationships (e.g., richness vs. urbanization).
 
 ### Richness vs. Urbanization
 Unsurprisingly, richness is negatively correlated with urbanization across all seasons. It does also appear as if there are substantial among-season differences in richness, even at low urbanization sites 
@@ -248,18 +251,18 @@ cor(data.site$imp1km, data.site$rich_obs_cw)
 ```
 
 ### Richness vs. Landscape Heterogeneity
-Generally this shows a weak but positive relationship, though the extremely high values seem to be dragging the curve downward
+Generally this shows a weak but positive relationship, with little variation among seasons
 ```{r}
 ggplot(data = data.site)+
   theme_classic() +
   stat_smooth(aes(x = sdhi5km, y = rich_obs_wd), fill = "green4", col = "green4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +    # , formula = y ~ x + I(x^2)
   geom_point(aes(x = sdhi5km, y = rich_obs_wd), col = "green4")+
   stat_smooth(aes(x = sdhi5km, y = rich_obs_ww), fill = "red4", col = "red4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +
   geom_point(aes(x = sdhi5km, y = rich_obs_ww), col = "red4")+
   stat_smooth(aes(x = sdhi5km, y = rich_obs_cw), fill = "blue4", col = "blue4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +
   geom_point(aes(x = sdhi5km, y = rich_obs_cw), col = "blue4") +
   coord_cartesian(ylim = c(0,12.5))
 cor(data.site$sdhi5km, data.site$rich_obs_wd)
@@ -271,13 +274,13 @@ cor(data.site$sdhi5km, data.site$rich_obs_cw)
 ggplot(data = data.site)+
   theme_classic() +
   stat_smooth(aes(x = ndvi_wd1km, y = rich_obs_wd), fill = "green4", col = "green4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +
   geom_point(aes(x = ndvi_wd1km, y = rich_obs_wd), col = "green4")+
   stat_smooth(aes(x = ndvi_ww1km, y = rich_obs_ww), fill = "red4", col = "red4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +
   geom_point(aes(x = ndvi_ww1km, y = rich_obs_ww), col = "red4")+
   stat_smooth(aes(x = ndvi_cw1km, y = rich_obs_cw), fill = "blue4", col = "blue4",
-              method = "lm", formula = y ~ x + I(x^2)) +
+              method = "lm") +
   geom_point(aes(x = ndvi_cw1km, y = rich_obs_cw), col = "blue4") +
   coord_cartesian(ylim = c(0,12.5))
 cor(data.site$ndvi_wd1km, data.site$rich_obs_wd)

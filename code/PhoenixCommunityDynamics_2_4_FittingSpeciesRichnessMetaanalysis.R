@@ -24,7 +24,7 @@
 
 #### Import Model Output File ####
   #out <- readRDS("./data/5_output/DCM_global/globalDCM_sample6k.rds")    # the smaller version of the model
-  out <- readRDS("C:/Research/urban/CAPLTER/projects/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis/data/5_output/globalDCMnoquadurb_sample30k.rds")    # the full version of the model
+  out <- readRDS("C:/Research/urban/CAPLTER/projects/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis/data/5_output/DCM_global/globalDCM_sample30k.rds")    # the full version of the model
 
 
 #### Summarize Species Richness ####
@@ -79,21 +79,21 @@
     cbind(
       1,
       data.site$imp1km_std,
-      # data.site$imp1km_std^2,
+      data.site$imp1km_std^2,
       data.site$sdhi5km_std#,
       #ndvi.1km.std[,1]
     ),
     cbind(
       1,
       data.site$imp1km_std,
-      # data.site$imp1km_std^2,
+      data.site$imp1km_std^2,
       data.site$sdhi5km_std#,
       #ndvi.1km.std[,2]
     ),
     cbind(
       1,
       data.site$imp1km_std,
-      # data.site$imp1km_std^2,
+      data.site$imp1km_std^2,
       data.site$sdhi5km_std#,
       #ndvi.1km.std[,3]
     ),
@@ -104,7 +104,7 @@
   dimnames(dm.alpha.all)[[2]] <- c(
     "intercept",
     "urbanization",
-    # "urbanization quad",
+    "urbanization quad",
     "heterogeneity"#,
     #"vegetation greenness"
   )
@@ -197,4 +197,5 @@
   
   
   write.csv(data.export, "./data/model_outputs/data_PhoenixCommDynamics.csv", row.names = FALSE)
+  
   
