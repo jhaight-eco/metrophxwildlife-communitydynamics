@@ -1,5 +1,5 @@
 ---
-title: "Dissertation - Phoenix Biodiversity Chapter - Model Fitting"
+title: "Metro Phoenix Wildlife Study - Community Dynamics - Examining Relationships Among Environmental Covariates"
 author: "Jeffrey Haight"
 date: "`r Sys.Date()`"
 output: word_document
@@ -14,25 +14,26 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 gc()
 
-
-library(jagsUI)
-library(rjags)
-#library(runjags)
-library(abind)
-
-library(dplyr)
-library(ggplot2)
-library(ggrepel)
-library(beepr)
-library(ggcorrplot)
+library(tidyverse)
+# library(ggcorrplot)
 library(GGally)
+library(ggrepel)
+
+# library(jagsUI)
+# library(rjags)
+#library(runjags)
+# library(abind)
+
+# library(dplyr)
+# library(ggplot2)
+# library(beepr)
 
 
 ```
 
 # Import Data
 ```{r}
-load("./data/4_input/ModelInputData_DCM.RData")
+load("~/GitHub/metrophxwildlife-communitydynamics/data/model_inputs/ModelInputData_DCM.RData")
 
 
 # Three seasons of data from the Metro Phoenix Wildlife Study
@@ -52,7 +53,6 @@ load("./data/4_input/ModelInputData_DCM.RData")
   # these were the only ones that were separate objects, because they were standardized by season
   str(K.std)
   str(ndvi.1km.std)
-  str(ndvihet.1km.std)
   
 # Species covariates
   str(data.spp)

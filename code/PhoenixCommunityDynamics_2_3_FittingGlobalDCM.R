@@ -177,6 +177,16 @@ head(msum)
 (CPO$sumCPO[1] <- calc_cpo(out))
 #beep(sound = "coin")
 
+
+# drop 'lik' from the samples, to reduce model object size before exporting 
+# now that the summary stat has been calculated, those aren't necessary and take up a lot of memory
+for(i in 1:nc){
+  lik <- as.matrix(out$samples[i])
+  not.lik <- lik[,-c(grep("lik", colnames(lik)))]  # drop the samples of the 'lik' parameter
+  out$samples[[i]] <- not.lik
+}
+
+
 # Export model outputs 
 saveRDS(out, "./data/5_output/DCM_global/globalDCMnoquadurb_sample3k.rds")
 write.csv(msum, "./data/5_output/DCM_global/globalDCMnoquadurb_sample3k_summary.csv")
