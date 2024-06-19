@@ -1,5 +1,5 @@
 ---
-title: "Metro Phoenix Wildlife Study - Community Dynamics - Predicting Use, Persistence, and Occupancy"
+title: "Metro Phoenix Wildlife Study - Community Dynamics - Predicting Occupancy, Persistence, and Colonization"
 author: "Jeffrey Haight"
 date: "`r Sys.Date()`"
 output: word_document
@@ -26,12 +26,10 @@ gc()
   library(vegan)
   
   # visualization packages
-  library(flextable)
   library(ggplot2)
   library(gghighlight)
   library(viridis)
   library(RColorBrewer)
-  library(nationalparkcolors)
   library(png)
 
 ```
@@ -52,7 +50,8 @@ gc()
   # this file is too large to share in the Github repository, 
   # but it can be reproduced by re-running the model code in the file ''
   # This file is also available at request to the corresponding author Jeff Haight
-  out <- readRDS("C:/Research/urban/CAPLTER/projects/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis/data/5_output/DCM_global/globalDCM_sample30k.rds")    
+  # setwd("C:/Research/projects/asu/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis")
+  out <- readRDS("./data/5_output/DCM_global/globalDCM_sample30k.rds")    
 
  
   tmp <- out$sims.list

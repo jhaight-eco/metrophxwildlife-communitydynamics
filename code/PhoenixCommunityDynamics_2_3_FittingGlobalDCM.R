@@ -162,7 +162,7 @@ inits <- function(){ list(
 # Approximate run time: 20-30 min on 
 (start.time <- Sys.time())
 out <- jags(bdata, inits, params, 
-            "./code/jags/model_DCM_global_noquadurb_04-18-23.R", 
+            "./code/jags/model_DCM_global_noquadurb.R", 
             n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
 (end.time <- Sys.time())
 elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -188,8 +188,8 @@ for(i in 1:nc){
 
 
 # Export model outputs 
-saveRDS(out, "./data/5_output/DCM_global/globalDCMnoquadurb_sample3k.rds")
-write.csv(msum, "./data/5_output/DCM_global/globalDCMnoquadurb_sample3k_summary.csv")
+saveRDS(out, "./data/model_outputs/DCM_global/globalDCMnoquadurb_sample3k.rds")
+write.csv(msum, "./data/model_outputs/DCM_global/globalDCMnoquadurb_sample3k_summary.csv")
 
 
 
@@ -198,7 +198,7 @@ write.csv(msum, "./data/5_output/DCM_global/globalDCMnoquadurb_sample3k_summary.
 # Approximate run time: 20-30 min on 
 (start.time <- Sys.time())
 out <- jags(bdata, inits, params, 
-            "./code/jags/model_DCM_global_04-18-23.R", 
+            "./code/jags/model_DCM_global.R", 
             n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
 (end.time <- Sys.time())
 elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -225,11 +225,11 @@ for(i in 1:nc){
 
 
 # Export model outputs 
-saveRDS(out, "./data/5_output/DCM_global/globalDCM_sample3k.rds")
-write.csv(msum, "./data/5_output/DCM_global/globalDCM_sample3k_summary.csv")
+saveRDS(out, "./data/model_outputs/DCM_global/globalDCM_sample3k.rds")
+write.csv(msum, "./data/model_outputs/DCM_global/globalDCM_sample3k_summary.csv")
 
 
 
 
 
-write.csv(CPO, "output/DCM_global/global_modelselectionCPO.csv", row.names = FALSE)
+write.csv(CPO, "./data/model_outputs/DCM_global/global_modelselectionCPO.csv", row.names = FALSE)

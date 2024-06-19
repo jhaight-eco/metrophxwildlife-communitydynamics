@@ -6,7 +6,7 @@
   set.seed(54321)
   
   # Set working directory
-  setwd("C:/Users/User/Documents/GitHub/metrophxwildlife-communitydynamics")
+  setwd("~/GitHub/metrophxwildlife-communitydynamics")
   
   # Load necessary packages
   library(jagsUI)   # for fitting models in JAGS
@@ -23,8 +23,9 @@
   
 
 #### Import Model Output File ####
-  #out <- readRDS("./data/5_output/DCM_global/globalDCM_sample6k.rds")    # the smaller version of the model
-  out <- readRDS("C:/Research/urban/CAPLTER/projects/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis/data/5_output/DCM_global/globalDCM_sample30k.rds")    # the full version of the model
+  # the full original version of the model is too large to upload to the GitHub repository
+  # this file can be recreated using the script 'PhoenixCommunityDynamics_2_3_FittingGlobalDCM.R'
+  out <- readRDS("./data/model_outputs/DCM_global/globalDCM_sample30k.rds")    
 
 
 #### Summarize Species Richness ####
@@ -143,7 +144,7 @@
   # fit model in JAGS, using 'jagsUI'
   (start.time <- Sys.time())
   m.sr <- jags(
-    model.file = "./code/jags/model_alphadiversity_multiseason_12-07-22.R",
+    model.file = "./code/jags/model_alphadiversity_multiseason.R",
     data = bdata,
     n.chains = nc,
     parameters.to.save = c("beta", "re_sd"),
