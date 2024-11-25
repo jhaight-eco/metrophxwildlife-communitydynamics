@@ -1,0 +1,1053 @@
+---
+title: "Metro Phoenix Wildlife Study - Community Dynamics - Predicting Occupancy, Persistence, and Colonization"
+author: "Jeffrey Haight"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls()) # clear the environment
+gc()
+
+
+# Set working directory
+#setwd("G:/My Drive/ASU/Jeff-Jesse-Sharon Document Sharing/Dissertation/Chapter1_PhoenixCommDynamics/analysis")
+
+  # Load necessary packages
+  #library(dplyr)
+  library(tidyverse)
+  library(abind)
+  
+  # modeling packages
+  library(jagsUI)
+  library(vegan)
+  
+  # visualization packages
+  library(ggplot2)
+  library(gghighlight)
+  library(viridis)
+  library(RColorBrewer)
+  library(png)
+
+```
+
+```{r import data}
+#### Import Data ####
+  # all the data put into the models
+  load("~/GitHub/metrophxwildlife-communitydynamics/data/model_inputs/ModelInputData_DCM.RData")
+  # The main dataset containing all the site and regional covariates 
+  # and summarized community composition parameters
+  data <- read.csv("~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/data_PhoenixCommDynamics.csv")
+  
+  # the model object
+   # the smaller version of the model
+  #out <- readRDS("./data/model_outputs/DCM_global/globalDCM_sample6k.rds")   
+  
+  # The full version of the model
+  # this file is too large to share in the Github repository, 
+  # but it can be reproduced by re-running the model code in the file ''
+  # This file is also available at request to the corresponding author Jeff Haight
+  # setwd("C:/Research/projects/asu/MetroPhoenixWildlifeStudy/CH1_communitydynamics/analysis")
+  # out <- readRDS("./data/5_output/DCM_global/globalDCM_sample30k.rds")    
+  # out <- readRDS("~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/globalDCM_sample3k.rds")  
+  out <- readRDS("~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/globalDCM_sample30k.rds")
+
+
+ 
+  tmp <- out$sims.list
+  nsamp <- dim(tmp$beta.comm.psi1)[[1]]
+  
+  rm(out)
+  gc()
+  
+  # total number of species in the modeled community
+  nspec <- nrow(data.spp)
+  
+```
+# Examine community-average effects
+```{r}
+# Where do the effects of urbanization peak?
+  # x = urbanization. Solve for 'urban' and you get where the peak in the relationship is 
+  #(as a standardized urbanization value)
+  # logis(psi) = beta1*x + beta2*x^2 + 0 + 0
+  # 0 = beta1 + 2*beta2*x
+  # x = -1*beta1/(2*beta2)
+  
+  # standardized values of imperviousness
+    (peak.psi <- -1*mean(tmp$beta.comm.psi1[,2])/(2*mean(tmp$beta.comm.psi1[,3]))) 
+    (peak.phi <- -1*mean(tmp$beta.comm.phi[,2])/(2*mean(tmp$beta.comm.phi[,3])))
+    (peak.gamma <- -1*mean(tmp$beta.comm.gamma[,2])/(2*mean(tmp$beta.comm.gamma[,2])))
+  # de-standardized them
+    (peak.psi)*sd(data.site$imp1km)+mean(data.site$imp1km)
+    # even though there may be a substantial quadratic term for urbanization,
+    # the 'peak' in psi1 would theoretically occur at negative urbanization, i.e., it doesn't really exist
+    (peak.phi)*sd(data.site$imp1km)+mean(data.site$imp1km)
+    # there is a 'peak' in persistence, but this didn't have a substantial quadratic term, so it is not quadratic by our assessment
+    (peak.gamma)*sd(data.site$imp1km)+mean(data.site$imp1km)
+    # this is the only parameter in the whole analysis with a substantial peaked relationship
+    # and the peak is at ~18.0% urbanization
+```
+
+
+
+# Setup for Predictions
+Set some general items for predicting parameters across ranges of idealized (hypothetical) trait values, including design matrices of environmental and species trait covariates where other values are held constant
+
+
+```{r design matrices environmental}
+# number of hypothetical environmental parameters to predict off of
+  npred <- 200
+
+# sets of hypothetical covariate values to predict off of
+    dm.urb <- cbind(
+      1,# intercept
+      seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred), #urban
+      seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred)^2, # urbanization quadratic term
+      0, # patch diversity
+      0  # veg greenness. This was standardized by season
+    )
+    dm.pdiv <- cbind(
+      1,# intercept
+      0, #urban
+      0, # urbanization quadratic term
+      seq(min(data$sdhi5km_std), max(data$sdhi5km_std), length.out = npred), # patch diversity
+      0  # veg greenness
+    )
+    dm.veg <- cbind(
+      1,# intercept
+      0, #urban
+      0, # urbanization quadratic term
+      0, # patch diversity
+      seq(min(ndvi.1km.std), max(ndvi.1km.std), length.out = npred)  # veg greenness
+    )
+    
+    # a.cov.occ <- array(NA, dim = c(n.site, n.season, length(covariates.occ)))
+```
+
+```{r explore traits}
+# find species with similar diets, but contrasting body sizes (the strict herbivores vs. carnivores would make sense)
+  data.spp %>% arrange(dietdiv) %>% select(c(name_short, logmass, BodyMass.Value, dietdiv#, order, class
+                                             ))
+  # "cottontail_desert", "mountain_lion", "bobcat", "jackrabbit_bt"
+
+# find species with similar body masses, but contrasting diets
+  data.spp %>% arrange(logmass) %>% select(c(name_short, logmass, BodyMass.Value, dietdiv#, order, class
+                                             ))
+  # "bobcat", "badger", "raccoon", "jackrabbit_bt"
+```
+
+```{r design matrices of spp traits}
+    data.spp %>% arrange(dietdiv) %>% select(name, logmass, dietdiv)
+  
+  # sequences of hypothetical trait values, non-standardized
+    range(data.spp$BodyMass.Value)
+    range(data.spp$dietdiv)
+    plot.bm <- c(
+      log10(1000), 
+      log10(5000),
+      log10(20000)
+      )
+    # 1000 g = roughly the size of a cottontail
+    # 5000 g = between fox and raccoon
+    # 20000 g = about the size of a javelina
+    
+    quantile(data.spp$dietdiv)
+    # 0 = obligate carnivores and herbivores. That is more extreme than just a diet specialist
+    # 0.325 = the least diverse diet that isn't 100% one category
+    # 1.557 = the most omnivorous species
+    #plot.di <- c(min(data.spp$dietdiv), mean(data.spp$dietdiv), max(data.spp$dietdiv))
+    plot.di <- c(
+      0.325, 
+      mean(data.spp$dietdiv),
+      max(data.spp$dietdiv)
+      )
+    
+    #plot.bm <- c(min(data.spp$logmass), mean(data.spp$logmass), max(data.spp$logmass))
+    #plot.di <- c(min(data.spp$dietdiv), mean(data.spp$dietdiv), max(data.spp$dietdiv))
+    
+    # standardize the sequences of hypothetical trait values, 
+    nspec.pred <- length(plot.bm)
+    #(seq.bm <- seq(min(data.spp$logmass_std), max(data.spp$logmass_std), length.out = nspec.pred))
+    #(seq.di <- seq(min(data.spp$dietdiv_std), max(data.spp$dietdiv_std), length.out = nspec.pred))
+    (seq.bm <- (plot.bm - mean(data.spp$logmass)/sd(data.spp$logmass)))
+    (seq.di <- (plot.di - mean(data.spp$dietdiv)/sd(data.spp$dietdiv)))
+    
+    seq.di*sd(data.spp$dietdiv)+mean(data.spp$dietdiv)
+    # create a design matrix based on the equations: 1 = intercept, seq. = trait values to predict off of
+    dm.bm <- cbind(
+      1, 
+      seq.bm, 
+      0
+      )      
+    dm.di <- cbind(
+      1, 
+      0,
+      seq.di
+      ) 
+```
+
+
+# Extract MCMC Parameter Distributions
+Pull out the mcmc samples of each intercept and slope parameter and put them into large matrices  
+
+### Community-average parameters
+```{r}
+str(tmp$beta.comm.psi1)
+
+str(tmp$beta.comm.phi)
+
+str(tmp$beta.comm.gamma)
+
+```
+
+### Species-specific parameters
+```{r}
+      str(beta.psi <- tmp$beta.sp.psi1)
+     
+      str(beta.phi <- tmp$beta.sp.phi)
+       
+      str(beta.gamma <- tmp$beta.sp.gamma)
+      
+       
+      
+      # beta.psi <- abind (
+      #   tmp$lpsi1,
+      #   tmp$beta1,
+      #   tmp$beta2.psi,
+      #   tmp$beta3.psi,
+      #   tmp$beta4.psi,
+      #   along = 3
+      # )
+      # beta.phi <- abind (
+      #   tmp$lphi,
+      #   tmp$beta1.phi,
+      #   tmp$beta2.phi,
+      #   tmp$beta3.phi,
+      #   tmp$beta4.phi,
+      #   along = 3
+      # )
+      # beta.gamma <- abind (
+      #   tmp$lgamma,
+      #   tmp$beta1.gamma,
+      #   tmp$beta2.gamma,
+      #   tmp$beta3.gamma,
+      #   tmp$beta4.gamma,
+      #   along = 3
+      # )   
+```
+
+
+
+# Predict Against Environmental Covariates
+Since we use matrix algebra for the community-average predictions, with no for loops, we don't need objects to store those values in.
+
+### Predictions of Community-average Parameters
+```{r}
+# hold all other values at their mean value, for illustration
+    # doing this using matrix math is muuuch quicker than massive 'for' loops
+  
+    # Urbanization, Psi1, community-average
+    mu.psi.urb <- plogis(tmp$beta.comm.psi1 %*% t(dm.urb))
+    
+    
+    # Urbanization, Phi, community-average
+    mu.phi.urb <- plogis(tmp$beta.comm.phi %*% t(dm.urb))
+    
+    
+    # Urbanization, Gamma, community-average
+    mu.gamma.urb <- plogis(tmp$beta.comm.gamma %*% t(dm.urb))
+    
+    
+    # Patch Diversity, Psi1, community-average
+    mu.psi.pdiv <- plogis(tmp$beta.comm.psi1 %*% t(dm.pdiv))
+    
+    # Patch Diversity, Phi, community-average
+    mu.phi.pdiv <- plogis(tmp$beta.comm.phi %*% t(dm.pdiv))
+    
+    # Patch Diversity, Gamma, community-average
+    mu.gamma.pdiv <- plogis(tmp$beta.comm.gamma %*% t(dm.pdiv))
+    
+    
+    # Vegetation, Psi1, community-average
+    mu.psi.veg <- plogis(tmp$beta.comm.psi1 %*% t(dm.veg))
+    
+    
+    # Vegetation, Phi, community-average
+    mu.phi.veg <- plogis(tmp$beta.comm.phi %*% t(dm.veg))
+    
+    
+    # Vegetation, Gamma, community-average
+    mu.gamma.veg <- plogis(tmp$beta.comm.gamma %*% t(dm.veg))
+    #for(i in 1:npred){
+    #  for(k in 1:nsamp){
+    #    mu.gamma.veg[k,i] <- plogis(
+    #      tmp$mu.lgamma[k] + 
+    #        tmp$mu.beta1.gamma[k]*0 +
+    #        tmp$mu.beta2.gamma[k]*0 +
+    #        tmp$mu.beta3.gamma[k]*0 +
+    #        tmp$mu.beta4.gamma[k]*dm.veg[i] 
+    #    )
+    #  }
+    #}
+    
+    
+```
+```{r assemble and export community predictions}
+# Put it all into one dataframe formatted for ggplot
+    # Summarize the predictions in the process
+    data.pred.comm <- data.frame(
+      "impervious" = seq(min(data$imp1km), max(data$imp1km), length.out = npred),
+      "impervious_std" = seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred),
+      "het" = seq(min(data$sdhi5km), max(data$sdhi5km), length.out = npred),
+      "veg" = seq(min(data$ndvi_ww1km), min(max(data$ndvi_cw1km)), length.out = npred),
+      #
+      "psi_urb" = apply(mu.psi.urb, c(2), function(x)   mean(x, na.rm=TRUE)),
+      "psi_urb_med" = c(t(apply(mu.psi.urb, c(2), function(x)   quantile(x, prob = c(0.50))))), #[1,]
+      "psi_urb_low95" = c(t(apply(mu.psi.urb, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "psi_urb_high95" = c(t(apply(mu.psi.urb, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "psi_urb_low85" = c(t(apply(mu.psi.urb, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "psi_urb_high85" = c(t(apply(mu.psi.urb, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "psi_pdiv" = apply(mu.psi.pdiv, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "psi_pdiv_med" = c(t(apply(mu.psi.pdiv, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "psi_pdiv_low95" = c(t(apply(mu.psi.pdiv, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "psi_pdiv_high95" = c(t(apply(mu.psi.pdiv, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "psi_pdiv_low85" = c(t(apply(mu.psi.pdiv, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "psi_pdiv_high85" = c(t(apply(mu.psi.pdiv, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "psi_veg" = apply(mu.psi.veg, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "psi_veg_med" = c(t(apply(mu.psi.veg, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "psi_veg_low95" = c(t(apply(mu.psi.veg, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "psi_veg_high95" = c(t(apply(mu.psi.veg, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "psi_veg_low85" = c(t(apply(mu.psi.veg, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "psi_veg_high85" = c(t(apply(mu.psi.veg, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      #
+      "phi_urb" = apply(mu.phi.urb, c(2), function(x)   mean(x, na.rm=TRUE)),
+      "phi_urb_med" = c(t(apply(mu.phi.urb, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "phi_urb_low95" = c(t(apply(mu.phi.urb, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "phi_urb_high95" = c(t(apply(mu.phi.urb, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "phi_urb_low85" = c(t(apply(mu.phi.urb, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "phi_urb_high85" = c(t(apply(mu.phi.urb, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "phi_pdiv" = apply(mu.phi.pdiv, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "phi_pdiv_med" = c(t(apply(mu.phi.pdiv, c(2), function(x)   quantile(x, prob = c(0.500))))),
+      "phi_pdiv_low95" = c(t(apply(mu.phi.pdiv, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "phi_pdiv_high95" = c(t(apply(mu.phi.pdiv, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "phi_pdiv_low85" = c(t(apply(mu.phi.pdiv, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "phi_pdiv_high85" = c(t(apply(mu.phi.pdiv, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "phi_veg" = apply(mu.phi.veg, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "phi_veg_med" = c(t(apply(mu.phi.veg, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "phi_veg_low95" = c(t(apply(mu.phi.veg, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "phi_veg_high95" = c(t(apply(mu.phi.veg, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "phi_veg_low85" = c(t(apply(mu.phi.veg, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "phi_veg_high85" = c(t(apply(mu.phi.veg, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      #
+      "gamma_urb" = apply(mu.gamma.urb, c(2), function(x)   mean(x, na.rm=TRUE)),
+      "gamma_urb_med" = c(t(apply(mu.gamma.urb, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "gamma_urb_low95" = c(t(apply(mu.gamma.urb, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "gamma_urb_high95" = c(t(apply(mu.gamma.urb, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "gamma_urb_low85" = c(t(apply(mu.gamma.urb, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "gamma_urb_high85" = c(t(apply(mu.gamma.urb, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "gamma_pdiv" = apply(mu.gamma.pdiv, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "gamma_pdiv_med" = c(t(apply(mu.gamma.pdiv, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "gamma_pdiv_low95" = c(t(apply(mu.gamma.pdiv, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "gamma_pdiv_high95" = c(t(apply(mu.gamma.pdiv, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "gamma_pdiv_low85" = c(t(apply(mu.gamma.pdiv, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "gamma_pdiv_high85" = c(t(apply(mu.gamma.pdiv, c(2), function(x)   quantile(x, prob = c(0.925))))),
+      "gamma_veg" = apply(mu.gamma.veg, c(2), function(x)   mean(x, na.rm=TRUE)) ,
+      "gamma_veg_med" = c(t(apply(mu.gamma.veg, c(2), function(x)   quantile(x, prob = c(0.50))))),
+      "gamma_veg_low95" = c(t(apply(mu.gamma.veg, c(2), function(x)   quantile(x, prob = c(0.025))))),
+      "gamma_veg_high95" = c(t(apply(mu.gamma.veg, c(2), function(x)   quantile(x, prob = c(0.975))))),
+      "gamma_veg_low85" = c(t(apply(mu.gamma.veg, c(2), function(x)   quantile(x, prob = c(0.075))))),
+      "gamma_veg_high85" = c(t(apply(mu.gamma.veg, c(2), function(x)   quantile(x, prob = c(0.925)))))
+      
+    )
+
+write.csv(data.pred.comm, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_commparams.csv", row.names = FALSE)
+
+rm(mu.psi.urb,
+   mu.phi.urb,
+   mu.gamma.urb,
+   mu.psi.pdiv,
+   mu.phi.pdiv,
+   mu.gamma.pdiv,
+   mu.psi.veg,
+   mu.phi.veg,
+   mu.gamma.veg)
+gc()
+
+```
+
+
+
+### Predictions of Species-level Parameters: Actual Species
+```{r species predictions vs urbanization}
+
+# objects for temporarily storing the predictions in the for-loop
+pred.mean <- array(NA, dim = c(nspec, npred, 3))  
+pred.2.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.med <- array(NA, dim = c(nspec, npred, 3))
+pred.97.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.7.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.87.5 <- array(NA, dim = c(nspec, npred, 3))
+
+ for (s in 1:nspec){
+        # spp.name <- data.spp$name[which(data.spp$name_short == spp.plot[s])]
+        mcmc.beta <- tmp$beta.sp.psi1[,,s]
+        
+        pred <- plogis(tmp$beta.sp.psi1[,,s] %*% t(dm.urb))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,1] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,1] <- pred.cri[,1]
+          pred.med[s,,1] <- pred.cri[,2]
+          pred.97.5[s,,1] <- pred.cri[,3]
+          pred.7.5[s,,1] <- pred.cri[,4]
+          pred.87.5[s,,1] <- pred.cri[,5]
+        
+        pred <- plogis(tmp$beta.sp.phi[,,s] %*% t(dm.urb))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,2] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,2] <- pred.cri[,1]
+          pred.med[s,,2] <- pred.cri[,2]
+          pred.97.5[s,,2] <- pred.cri[,3]
+          pred.7.5[s,,2] <- pred.cri[,4]
+          pred.87.5[s,,2] <- pred.cri[,5]
+          
+        pred <- plogis(tmp$beta.sp.gamma[,,s] %*% t(dm.urb))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,3] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,3] <- pred.cri[,1]
+          pred.med[s,,3] <- pred.cri[,2]
+          pred.97.5[s,,3] <- pred.cri[,3]
+          pred.7.5[s,,3] <- pred.cri[,4]
+          pred.87.5[s,,3] <- pred.cri[,5]
+          
+      # print(head(pred.mean[s,,]))
+      # print(names.short[s])
+      
+ }
+
+# combine the species predictions into one dataframe with the covariates
+data.pred.sp.urb <- data.frame(
+  "name_short" = rep(names.short, npred),
+  "impervious" = rep(seq(min(data$imp1km), max(data$imp1km), length.out = npred), each = nspec),
+  "impervious_std" = rep(seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred), each = nspec),
+  "psi_mean" = matrix(pred.mean[,,1], ncol = 1)[,1],
+  "psi_med" = matrix(pred.med[,,1], ncol = 1)[,1],
+  "psi_low95" = matrix(pred.2.5[,,1], ncol = 1)[,1],
+  "psi_upp95" = matrix(pred.97.5[,,1], ncol = 1)[,1],
+  "psi_low85" = matrix(pred.7.5[,,1], ncol = 1)[,1],
+  "psi_upp85" = matrix(pred.87.5[,,1], ncol = 1)[,1],
+  "phi_mean" = matrix(pred.mean[,,2], ncol = 1)[,1],
+  "phi_med" = matrix(pred.med[,,2], ncol = 1)[,1],
+  "phi_low95" = matrix(pred.2.5[,,2], ncol = 1)[,1],
+  "phi_upp95" = matrix(pred.97.5[,,2], ncol = 1)[,1],
+  "phi_low85" = matrix(pred.7.5[,,2], ncol = 1)[,1],
+  "phi_upp85" = matrix(pred.87.5[,,2], ncol = 1)[,1],
+  "gamma_mean" = matrix(pred.mean[,,3], ncol = 1)[,1],
+  "gamma_med" = matrix(pred.med[,,3], ncol = 1)[,1],
+  "gamma_low95" = matrix(pred.2.5[,,3], ncol = 1)[,1],
+  "gamma_upp95" = matrix(pred.97.5[,,3], ncol = 1)[,1],
+  "gamma_low85" = matrix(pred.7.5[,,3], ncol = 1)[,1],
+  "gamma_upp85" = matrix(pred.87.5[,,3], ncol = 1)[,1]
+) %>% left_join(data.spp)
+
+
+        
+        
+write.csv(data.pred.sp.urb, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_spp_urban.csv", row.names = FALSE)
+```
+
+
+
+```{r species predictions vs patch diversity}
+
+# objects for temporarily storing the predictions in the for-loop
+pred.mean <- array(NA, dim = c(nspec, npred, 3))  
+pred.2.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.med <- array(NA, dim = c(nspec, npred, 3))
+pred.97.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.7.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.87.5 <- array(NA, dim = c(nspec, npred, 3))
+
+ for (s in 1:nspec){
+        # spp.name <- data.spp$name[which(data.spp$name_short == spp.plot[s])]
+        mcmc.beta <- tmp$beta.sp.psi1[,,s]
+        
+        pred <- plogis(tmp$beta.sp.psi1[,,s] %*% t(dm.pdiv))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,1] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,1] <- pred.cri[,1]
+          pred.med[s,,1] <- apply(pred, c(2), function(x)   median(x, na.rm=TRUE))
+          pred.97.5[s,,1] <- pred.cri[,3]
+          pred.7.5[s,,1] <- pred.cri[,4]
+          pred.87.5[s,,1] <- pred.cri[,5]
+        
+        pred <- plogis(tmp$beta.sp.phi[,,s] %*% t(dm.pdiv))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,2] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,2] <- pred.cri[,1]
+          pred.med[s,,2] <- pred.cri[,2]
+          pred.97.5[s,,2] <- pred.cri[,3]
+          pred.7.5[s,,2] <- pred.cri[,4]
+          pred.87.5[s,,2] <- pred.cri[,5]
+          
+        pred <- plogis(tmp$beta.sp.gamma[,,s] %*% t(dm.pdiv))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,3] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,3] <- pred.cri[,1]
+          pred.med[s,,3] <- pred.cri[,2]
+          pred.97.5[s,,3] <- pred.cri[,3]
+          pred.7.5[s,,3] <- pred.cri[,4]
+          pred.87.5[s,,3] <- pred.cri[,5]
+          
+      # print(head(pred.mean[s,,]))
+      # print(names.short[s])
+      
+ }
+
+# combine the species predictions into one dataframe with the covariates
+data.pred.sp.pdiv <- data.frame(
+  "name_short" = rep(names.short, npred),
+  "sdhi" = rep(seq(min(data$sdhi5km), max(data$sdhi5km), length.out = npred), each = nspec),
+  "sdhi_std" = rep(seq(min(data$sdhi5km_std), max(data$sdhi5km_std), length.out = npred), each = nspec),
+  "psi_mean" = matrix(pred.mean[,,1], ncol = 1)[,1],
+  "psi_med" = matrix(pred.med[,,1], ncol = 1)[,1],
+  "psi_low95" = matrix(pred.2.5[,,1], ncol = 1)[,1],
+  "psi_upp95" = matrix(pred.97.5[,,1], ncol = 1)[,1],
+  "psi_low85" = matrix(pred.7.5[,,1], ncol = 1)[,1],
+  "psi_upp85" = matrix(pred.87.5[,,1], ncol = 1)[,1],
+  "phi_mean" = matrix(pred.mean[,,2], ncol = 1)[,1],
+  "phi_med" = matrix(pred.med[,,2], ncol = 1)[,1],
+  "phi_low95" = matrix(pred.2.5[,,2], ncol = 1)[,1],
+  "phi_upp95" = matrix(pred.97.5[,,2], ncol = 1)[,1],
+  "phi_low85" = matrix(pred.7.5[,,2], ncol = 1)[,1],
+  "phi_upp85" = matrix(pred.87.5[,,2], ncol = 1)[,1],
+  "gamma_mean" = matrix(pred.mean[,,3], ncol = 1)[,1],
+  "gamma_med" = matrix(pred.med[,,3], ncol = 1)[,1],
+  "gamma_low95" = matrix(pred.2.5[,,3], ncol = 1)[,1],
+  "gamma_upp95" = matrix(pred.97.5[,,3], ncol = 1)[,1],
+  "gamma_low85" = matrix(pred.7.5[,,3], ncol = 1)[,1],
+  "gamma_upp85" = matrix(pred.87.5[,,3], ncol = 1)[,1]
+) %>% left_join(data.spp)        
+      
+        
+write.csv(data.pred.sp.pdiv, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_spp_patchdiversity.csv", row.names = FALSE)
+```
+
+
+
+```{r species predictions vs vegetation}
+pred.mean <- array(NA, dim = c(nspec, npred, 3))  
+pred.2.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.med <- array(NA, dim = c(nspec, npred, 3))
+pred.97.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.7.5 <- array(NA, dim = c(nspec, npred, 3))
+pred.87.5 <- array(NA, dim = c(nspec, npred, 3))
+
+ for (s in 1:nspec){
+        # spp.name <- data.spp$name[which(data.spp$name_short == spp.plot[s])]
+        mcmc.beta <- tmp$beta.sp.psi1[,,s]
+        
+        pred <- plogis(tmp$beta.sp.psi1[,,s] %*% t(dm.veg))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,1] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,1] <- pred.cri[,1]
+          pred.med[s,,1] <- apply(pred, c(2), function(x)   median(x, na.rm=TRUE))
+          pred.97.5[s,,1] <- pred.cri[,3]
+          pred.7.5[s,,1] <- pred.cri[,4]
+          pred.87.5[s,,1] <- pred.cri[,5]
+        
+        pred <- plogis(tmp$beta.sp.phi[,,s] %*% t(dm.veg))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,2] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,2] <- pred.cri[,1]
+          pred.med[s,,2] <- pred.cri[,2]
+          pred.97.5[s,,2] <- pred.cri[,3]
+          pred.7.5[s,,2] <- pred.cri[,4]
+          pred.87.5[s,,2] <- pred.cri[,5]
+          
+        pred <- plogis(tmp$beta.sp.gamma[,,s] %*% t(dm.veg))
+          pred.cri <- apply(pred, 2, quantile, probs = c(0.025,0.5,0.975, 0.075, 0.0875)) %>% t() %>% data.frame()
+          pred.mean[s,,3] <- apply(pred, c(2), function(x)   mean(x, na.rm=TRUE))
+          pred.2.5[s,,3] <- pred.cri[,1]
+          pred.med[s,,3] <- pred.cri[,2]
+          pred.97.5[s,,3] <- pred.cri[,3]
+          pred.7.5[s,,3] <- pred.cri[,4]
+          pred.87.5[s,,3] <- pred.cri[,5]
+          
+      # print(head(pred.mean[s,,]))
+      # print(names.short[s])
+      
+ }
+
+# combine the species predictions into one dataframe with the covariates
+data.pred.sp.veg <- data.frame(
+  "name_short" = rep(names.short, npred),
+  "veg" = rep(seq(min(data$ndvi_ww1km), max(data$ndvi_cw1km), length.out = npred), each = nspec),
+  "veg_std" = rep(seq(min(ndvi.1km.std), max(ndvi.1km.std), length.out = npred), each = nspec),
+  "psi_mean" = matrix(pred.mean[,,1], ncol = 1)[,1],
+  "psi_med" = matrix(pred.med[,,1], ncol = 1)[,1],
+  "psi_low95" = matrix(pred.2.5[,,1], ncol = 1)[,1],
+  "psi_upp95" = matrix(pred.97.5[,,1], ncol = 1)[,1],
+  "psi_low85" = matrix(pred.7.5[,,1], ncol = 1)[,1],
+  "psi_upp85" = matrix(pred.87.5[,,1], ncol = 1)[,1],
+  "phi_mean" = matrix(pred.mean[,,2], ncol = 1)[,1],
+  "phi_med" = matrix(pred.med[,,2], ncol = 1)[,1],
+  "phi_low95" = matrix(pred.2.5[,,2], ncol = 1)[,1],
+  "phi_upp95" = matrix(pred.97.5[,,2], ncol = 1)[,1],
+  "phi_low85" = matrix(pred.7.5[,,2], ncol = 1)[,1],
+  "phi_upp85" = matrix(pred.87.5[,,2], ncol = 1)[,1],
+  "gamma_mean" = matrix(pred.mean[,,3], ncol = 1)[,1],
+  "gamma_med" = matrix(pred.med[,,3], ncol = 1)[,1],
+  "gamma_low95" = matrix(pred.2.5[,,3], ncol = 1)[,1],
+  "gamma_upp95" = matrix(pred.97.5[,,3], ncol = 1)[,1],
+  "gamma_low85" = matrix(pred.7.5[,,3], ncol = 1)[,1],
+  "gamma_upp85" = matrix(pred.87.5[,,3], ncol = 1)[,1]
+) %>% left_join(data.spp)     
+        
+        
+        write.csv(data.pred.sp.veg, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_spp_vegetation.csv", row.names = FALSE)
+```
+
+
+
+
+### Predictions of Species-level Parameters: Species with Idealized Traits
+```{r matrices with trait effects}
+# Grab the appropriate intercept (community-average) and slope parameters for the species traits
+
+    str(tmp$beta.comm.psi1)
+    str(tmp$eff.traits.psi)
+    
+    beta.psi.traits <- abind(tmp$beta.comm.psi1, tmp$eff.traits.psi)
+    beta.phi.traits <- abind(tmp$beta.comm.phi, tmp$eff.traits.phi)
+    beta.gamma.traits <- abind(tmp$beta.comm.gamma, tmp$eff.traits.gamma)
+    
+    str(beta.psi.traits)
+
+    # psi
+    # beta.psi.int <- cbind(tmp$mu.lpsi, tmp$dint.psi.trait1, tmp$dint.psi.trait2)
+    # beta.psi.urb <- cbind(tmp$mu.beta1.psi, tmp$deff1.psi.trait1, tmp$deff1.psi.trait2)
+    # beta.psi.urbquad <- cbind(tmp$mu.beta2.psi, tmp$deff2.psi.trait1, tmp$deff2.psi.trait2)
+    # beta.psi.pdiv <- cbind(tmp$mu.beta3.psi, tmp$deff3.psi.trait1, tmp$deff3.psi.trait2)
+    # beta.psi.veg <- cbind(tmp$mu.beta4.psi, tmp$deff4.psi.trait1, tmp$deff4.psi.trait2)
+    
+    # phi
+    # beta.phi.int <- cbind(tmp$mu.lphi, tmp$dint.phi.trait1, tmp$dint.phi.trait2)
+    # beta.phi.urb <- cbind(tmp$mu.beta1.phi, tmp$deff1.phi.trait1, tmp$deff1.phi.trait2)
+    # beta.phi.urbquad <- cbind(tmp$mu.beta2.phi, tmp$deff2.phi.trait1, tmp$deff2.phi.trait2)
+    # beta.phi.pdiv <- cbind(tmp$mu.beta3.phi, tmp$deff3.phi.trait1, tmp$deff3.phi.trait2)
+    # beta.phi.veg <- cbind(tmp$mu.beta4.phi, tmp$deff4.phi.trait1, tmp$deff4.phi.trait2)
+    
+    # # gamma
+    # beta.gamma.int <- cbind(tmp$mu.lgamma, tmp$dint.gamma.trait1, tmp$dint.gamma.trait2)
+    # beta.gamma.urb <- cbind(tmp$mu.beta1.gamma, tmp$deff1.gamma.trait1, tmp$deff1.gamma.trait2)
+    # beta.gamma.urbquad <- cbind(tmp$mu.beta2.gamma, tmp$deff2.gamma.trait1, tmp$deff2.gamma.trait2)
+    # beta.gamma.pdiv <- cbind(tmp$mu.beta3.gamma, tmp$deff3.gamma.trait1, tmp$deff3.gamma.trait2)
+    # beta.gamma.veg <- cbind(tmp$mu.beta4.gamma, tmp$deff4.gamma.trait1, tmp$deff4.gamma.trait2)
+```
+```{r predict intercept and slopes based on idealized traits}
+beta.psi.bm <- abind(
+            (beta.psi.traits[,1,] %*% t(dm.bm)),  # effects of the traits on the intercept  # was originally 30K by 3
+            (beta.psi.traits[,2,] %*% t(dm.bm)),
+            (beta.psi.traits[,3,] %*% t(dm.bm)),
+            (beta.psi.traits[,4,] %*% t(dm.bm)),
+            (beta.psi.traits[,5,] %*% t(dm.bm)),
+            along = 3)
+
+
+beta.psi.di <- abind(
+            (beta.psi.traits[,1,] %*% t(dm.di)),  
+            (beta.psi.traits[,2,] %*% t(dm.di)),
+            (beta.psi.traits[,3,] %*% t(dm.di)),
+            (beta.psi.traits[,4,] %*% t(dm.di)),
+            (beta.psi.traits[,5,] %*% t(dm.di)),
+            along = 3)
+
+beta.phi.bm <- abind(
+            (beta.phi.traits[,1,] %*% t(dm.bm)),  
+            (beta.phi.traits[,2,] %*% t(dm.bm)),
+            (beta.phi.traits[,3,] %*% t(dm.bm)),
+            (beta.phi.traits[,4,] %*% t(dm.bm)),
+            (beta.phi.traits[,5,] %*% t(dm.bm)),
+            along = 3)
+
+beta.phi.di <- abind(
+            (beta.phi.traits[,1,] %*% t(dm.di)),  
+            (beta.phi.traits[,2,] %*% t(dm.di)),
+            (beta.phi.traits[,3,] %*% t(dm.di)),
+            (beta.phi.traits[,4,] %*% t(dm.di)),
+            (beta.phi.traits[,5,] %*% t(dm.di)),
+            along = 3)
+
+beta.gamma.bm <- abind(
+            (beta.gamma.traits[,1,] %*% t(dm.bm)),
+            (beta.gamma.traits[,2,] %*% t(dm.bm)),
+            (beta.gamma.traits[,3,] %*% t(dm.bm)),
+            (beta.gamma.traits[,4,] %*% t(dm.bm)),
+            (beta.gamma.traits[,5,] %*% t(dm.bm)),
+            along = 3)
+
+beta.gamma.di <- abind(
+            (beta.gamma.traits[,1,] %*% t(dm.di)),
+            (beta.gamma.traits[,2,] %*% t(dm.di)),
+            (beta.gamma.traits[,3,] %*% t(dm.di)),
+            (beta.gamma.traits[,4,] %*% t(dm.di)),
+            (beta.gamma.traits[,5,] %*% t(dm.di)),
+            along = 3)
+
+
+# take a look at an example
+str(beta.psi.di)
+dm.di
+
+
+beta.psi.traits %>% apply(MARGIN = c(2,3), mean)
+  # col 1 = community-average intercept and slopes
+  # col 2+3 = effects of each trait on each intercept and slope
+
+# logit-scale intercept and slopes of a diet specialist (first row) vs generalist (last row)
+  beta.psi.di %>% apply(MARGIN = c(2,3), mean)   
+  # the diet generalist should have less negative urbanization (and quad urban) relationship
+
+# beta.psi.bm <- abind(
+#             (beta.psi.int %*% t(dm.bm)),
+#             (beta.psi.urb %*% t(dm.bm)),
+#             (beta.psi.urbquad %*% t(dm.bm)),
+#             (beta.psi.pdiv %*% t(dm.bm)),
+#             (beta.psi.veg %*% t(dm.bm)),
+#             along = 3)
+# 
+# beta.psi.di <- abind(
+#             (beta.psi.int %*% t(dm.di)),
+#             (beta.psi.urb %*% t(dm.di)),
+#             (beta.psi.urbquad %*% t(dm.di)),
+#             (beta.psi.pdiv %*% t(dm.di)),
+#             (beta.psi.veg %*% t(dm.di)),
+#             along = 3)
+# 
+# beta.phi.bm <- abind(
+#             (beta.phi.int %*% t(dm.bm)),
+#             (beta.phi.urb %*% t(dm.bm)),
+#             (beta.phi.urbquad %*% t(dm.bm)),
+#             (beta.phi.pdiv %*% t(dm.bm)),
+#             (beta.phi.veg %*% t(dm.bm)),
+#             along = 3)
+# 
+# beta.phi.di <- abind(
+#             (beta.phi.int %*% t(dm.di)),
+#             (beta.phi.urb %*% t(dm.di)),
+#             (beta.phi.urbquad %*% t(dm.di)),
+#             (beta.phi.pdiv %*% t(dm.di)),
+#             (beta.phi.veg %*% t(dm.di)),
+#             along = 3)
+# 
+# beta.gamma.bm <- abind(
+#             (beta.gamma.int %*% t(dm.bm)),
+#             (beta.gamma.urb %*% t(dm.bm)),
+#             (beta.gamma.urbquad %*% t(dm.bm)),
+#             (beta.gamma.pdiv %*% t(dm.bm)),
+#             (beta.gamma.veg %*% t(dm.bm)),
+#             along = 3)
+# 
+# beta.gamma.di <- abind(
+#             (beta.gamma.int %*% t(dm.di)),
+#             (beta.gamma.urb %*% t(dm.di)),
+#             (beta.gamma.urbquad %*% t(dm.di)),
+#             (beta.gamma.pdiv %*% t(dm.di)),
+#             (beta.gamma.veg %*% t(dm.di)),
+#             along = 3)
+```
+
+```{r dataframes for species predictions}
+data.pred.bm <- data.frame(
+        "pred_num" = rep(c(1:npred), each = nspec.pred),  # an index of the prediction number (what level of env. covariate)
+        "species" = rep(paste("sp", 1:nspec.pred, sep = ""), npred),
+        "logmass" = rep(plot.bm, npred),
+        "logmass_std" = rep(dm.bm[,2], npred),
+        "impervious" = rep(seq(min(data$imp1km), max(data$imp1km), length.out = npred), each = nspec.pred),
+        "impervious_std" = rep(seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred), each = nspec.pred),
+        "sdhi" = rep(seq(min(data$sdhi5km), max(data$sdhi5km), length.out = npred), each = nspec.pred),
+        "sdhi_std" = rep(seq(min(data$sdhi5km_std), max(data$sdhi5km_std), length.out = npred), each = nspec.pred),
+        "veg" = rep(seq(min(data$ndvi_ww1km), max(data$ndvi_cw1km), length.out = npred), each = nspec.pred),
+        "veg_std" = rep(seq(min(ndvi.1km.std), max(ndvi.1km.std), length.out = npred), each = nspec.pred)
+      )
+
+data.pred.di <- data.frame(
+        "pred_num" = rep(c(1:npred), each = nspec.pred),
+        "species" = rep(paste("sp", 1:nspec.pred, sep = ""), npred),
+        "dietdiv" = rep(plot.di, npred),
+        "dietdiv_std" = rep(dm.di[,3], npred),
+        "impervious" = rep(seq(min(data$imp1km), max(data$imp1km), length.out = npred), each = nspec.pred),
+        "impervious_std" = rep(seq(min(data$imp1km_std), max(data$imp1km_std), length.out = npred), each = nspec.pred),
+        "sdhi" = rep(seq(min(data$sdhi5km), max(data$sdhi5km), length.out = npred), each = nspec.pred),
+        "sdhi_std" = rep(seq(min(data$sdhi5km_std), max(data$sdhi5km_std), length.out = npred), each = nspec.pred),
+        "veg" = rep(seq(min(data$ndvi_ww1km), max(data$ndvi_cw1km), length.out = npred), each = nspec.pred),
+        "veg_std" = rep(seq(min(ndvi.1km.std), max(ndvi.1km.std), length.out = npred), each = nspec.pred)
+      )
+```
+
+
+```{r predict urbanization effects by size, warning = FALSE}
+# objects for storing data produced by loops
+  # the second dimension will be the number of "species" to predict for
+  # 3 being the number of summary stats (lower CRI, median, upper CRI)
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.bm[,s,] %*% t(dm.urb))
+        pred.phi[,s,] <- plogis(beta.phi.bm[,s,] %*% t(dm.urb))
+        pred.gamma[,s,] <- plogis(beta.gamma.bm[,s,] %*% t(dm.urb))
+        # print(s)
+}
+  
+
+# A more efficient way of summarizing and adding the predictions to the dataframe (vs. what's below)
+data.pred.bm <- data.pred.bm %>% arrange(species, pred_num) %>% mutate(
+  psi_urb_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)
+        
+      # data.pred.bm$psi_urb_med <- data.frame(
+      #   t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # 
+      # data.pred.bm$psi_urb_low95 <- data.frame(
+      #   t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # 
+      # data.pred.bm$psi_urb_high95 <- data.frame(
+      #   t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))),
+      #   "index" = c(1:npred)
+      # ) %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # 
+      # # repeat for the remaining parameters
+      # data.pred.bm$phi_urb_med <- data.frame(
+      #   t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # data.pred.bm$phi_urb_low95 <- data.frame(
+      #   t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # data.pred.bm$phi_urb_high95 <- data.frame(
+      #   t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))),
+      #   "index" = c(1:npred)
+      # ) %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # 
+      # data.pred.bm$gamma_urb_med <- data.frame(
+      #   t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # data.pred.bm$gamma_urb_low95 <- data.frame(
+      #   t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))),
+      #   "index" = c(1:npred)
+      # )  %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      # 
+      # data.pred.bm$gamma_urb_high95 <- data.frame(
+      #   t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))),
+      #   "index" = c(1:npred)
+      # ) %>% pivot_longer(cols = -c(index)) %>% pull(value)
+      
+      
+```
+
+```{r predict patch diversity effects by size, warning = FALSE}
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.bm[,s,] %*% t(dm.pdiv))
+        pred.phi[,s,] <- plogis(beta.phi.bm[,s,] %*% t(dm.pdiv))
+        pred.gamma[,s,] <- plogis(beta.gamma.bm[,s,] %*% t(dm.pdiv))
+        # print(s)
+}
+
+data.pred.bm <- data.pred.bm  %>% arrange(species, pred_num) %>% mutate(
+  psi_pdiv_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)
+      
+```
+
+```{r predict vegetation effects by size, warning = FALSE}
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.bm[,s,] %*% t(dm.veg))
+        pred.phi[,s,] <- plogis(beta.phi.bm[,s,] %*% t(dm.veg))
+        pred.gamma[,s,] <- plogis(beta.gamma.bm[,s,] %*% t(dm.veg))
+        # print(s)
+}
+  
+      data.pred.bm$psi_veg_med %>% str()
+      
+      
+data.pred.bm <- data.pred.bm  %>% arrange(species, pred_num) %>% mutate(
+  psi_veg_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)
+    
+```
+
+```{r predict urbanization effects by diet, warning = FALSE}
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.di[,s,] %*% t(dm.urb))
+        pred.phi[,s,] <- plogis(beta.phi.di[,s,] %*% t(dm.urb))
+        pred.gamma[,s,] <- plogis(beta.gamma.di[,s,] %*% t(dm.urb))
+        # print(s)
+}
+  
+data.pred.di <- data.pred.di  %>% arrange(species, pred_num) %>% mutate(
+  psi_urb_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_urb_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_urb_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_urb_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)     
+      
+```
+
+```{r predict patch diversity effects by diet, warning = FALSE}
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.di[,s,] %*% t(dm.pdiv))
+        pred.phi[,s,] <- plogis(beta.phi.di[,s,] %*% t(dm.pdiv))
+        pred.gamma[,s,] <- plogis(beta.gamma.di[,s,] %*% t(dm.pdiv))
+        # print(s)
+}
+  
+data.pred.di <- data.pred.di  %>% arrange(species, pred_num) %>% mutate(
+  psi_pdiv_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_pdiv_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_pdiv_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_pdiv_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)
+```
+
+```{r predict vegetation effects by diet, warning = FALSE}
+  pred.phi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.psi <- array(NA, dim = c(nsamp, nspec.pred, npred))
+  pred.gamma <- array(NA, dim = c(nsamp, nspec.pred, npred)) 
+          
+          
+for(s in 1:nspec.pred){
+        pred.psi[,s,] <- plogis(beta.psi.di[,s,] %*% t(dm.veg))
+        pred.phi[,s,] <- plogis(beta.phi.di[,s,] %*% t(dm.veg))
+        pred.gamma[,s,] <- plogis(beta.gamma.di[,s,] %*% t(dm.veg))
+        # print(s)
+}
+  
+data.pred.di <- data.pred.di %>% arrange(species, pred_num)%>% mutate(
+  psi_veg_med = (t(apply(pred.psi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_low95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_high95 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_low85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  psi_veg_high85 = (t(apply(pred.psi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_med = (t(apply(pred.phi, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_low95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_high95 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_low85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  phi_veg_high85 = (t(apply(pred.phi, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_med  = (t(apply(pred.gamma, c(2,3), function(x)   median(x, na.rm = T))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_low95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.025)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_high95 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.975)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_low85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.075)))) %>% matrix(nrow = npred*nspec.pred))[,1],
+  gamma_veg_high85 = (t(apply(pred.gamma, c(2,3), function(x)   quantile(x, na.rm = T, probs = c(0.875)))) %>% matrix(nrow = npred*nspec.pred))[,1]
+)   
+      
+```
+```{r export trait predictions}
+data.pred.bm %>% arrange(species, pred_num)
+data.pred.di %>% arrange(species, pred_num)
+
+
+write.csv(data.pred.bm, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_ideal_3spp_size.csv", row.names = FALSE)
+write.csv(data.pred.di, "~/GitHub/metrophxwildlife-communitydynamics/data/model_outputs/predictions_ideal_3spp_diet.csv", row.names = FALSE)
+```

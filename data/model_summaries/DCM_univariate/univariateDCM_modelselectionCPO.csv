@@ -1,0 +1,13 @@
+"","predictor","scale","sumCPO"
+"1","urbanization",100,2180.30365187733
+"2","urbanization",1000,2166.48498053616
+"3","urbanization",5000,2197.8359860726
+"4","urbanization quad",100,2183.99884836518
+"5","urbanization quad",1000,2155.26157645201
+"6","urbanization quad",5000,2199.35400303986
+"7","heterogeneity",100,2416.76484005916
+"8","heterogeneity",1000,2415.54943453128
+"9","heterogeneity",5000,2430.40282744615
+"10","vegetation greenness",100,2417.7383978366
+"11","vegetation greenness",1000,2414.90807323908
+"12","vegetation greenness",5000,2430.26736514862
