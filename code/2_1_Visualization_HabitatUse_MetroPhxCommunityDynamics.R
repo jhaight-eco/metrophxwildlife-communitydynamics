@@ -34,7 +34,7 @@ setwd("~/GitHub/metrophxwildlife-communitydynamics")
   # predicted across each environmental covariate with all others held constant
   data.pred.comm <- read.csv("./data/model_outputs/predictions_commparams.csv")
   
-  # Species-level parameter predictions based on the actual trait values of the 20 species
+  # Species-level parameter predictions based on the beta estimates ofthe 20 species
   pred.spp.urb <- read.csv("./data/model_outputs/predictions_spp_urban.csv")    
   pred.spp.pdiv <- read.csv("./data/model_outputs/predictions_spp_patchdiversity.csv")    
   pred.spp.veg <- read.csv("./data/model_outputs/predictions_spp_vegetation.csv")
@@ -824,10 +824,62 @@ setwd("~/GitHub/metrophxwildlife-communitydynamics")
          dpi = 300)
   
   
- 
+  
+#### SUPPLEMENTARY FIGURE: TRAIT VARIATION ####
+  plot.traits <- data.spp %>%
+    ggplot(aes(x = logmass, y = dietdiv)) +
+    geom_text_repel(aes(label = name), force = 1, size = 3) +
+    theme_classic(base_size = 12) +
+    # scale()
+    geom_point() +
+    scale_x_continuous(trans = "log10", 
+                       breaks = log10(c(0.1, 0.25, 0.5, 1, 2.5, 5, 10,25, 50)*1000), 
+                       labels = c("0.10", "0.25", "0.50", "1", "2.5", "5","10","25", "50")
+                       )+
+    labs(x = "Body Mass (kg)", y = "Diet Diversity Index (H')") +
+    theme(axis.text.x = element_text(face = "bold"), 
+          axis.text.y = element_text(face = "bold"), 
+          # legend.position = "none",
+          legend.title = element_text(face = "bold"),
+          legend.text = element_text(face = "bold"),
+          # axis.ticks = element_blank(),
+          axis.title.x = element_text(face = "bold", size = 12), 
+          axis.title.y = element_text(face = "bold", size = 12))
+  plot.traits
+  
+  ggsave("./figures/appendix/traitdistribution_SizeVsDiet.png",
+         plot.traits,
+         width = 6,
+         height = 5,
+         units = "in",
+         dpi = 300)
   
 #### SUPPLEMENTARY FIGURE: PREDICTIONS FOR ACTUAL SPECIES ####
-##### plot spp predictions vs urbanization #####  
+##### plot spp predictions vs urbanization ##### 
+  # By size, all at once
+  # plot.psi.urb <- ggplot(data = pred.spp.urb, aes(x = impervious, y = psi_med, 
+  #                                                 group = logmass, fill = logmass, col = logmass)) +
+  #   geom_smooth(method = "gam", lwd = 2, col = "black", se = FALSE) +
+  #   geom_smooth(method = "gam", lwd = 1, se = FALSE) +
+  #   theme_classic(base_size = 20) +
+  #   # geom_ribbon(aes(ymin = psi_low95, ymax = psi_upp95), alpha = 0.4, color = NA) +
+  #   scale_color_viridis(option = "plasma", direction = -1, begin = 0.25, end = 0.8,
+  #                       trans = "log10", breaks = log10(c(0.5, 1, 5, 20)*1000), labels = c("0.5", "1", "5", "20")) +
+  #   scale_fill_viridis(option = "plasma", direction = -1, begin = 0.25, end = 0.8,
+  #                      trans = "log10", breaks = log10(c(0.5, 1, 5, 20)*1000), labels = c("0.5", "1", "5", "20")) +
+  #   coord_cartesian(ylim = c(0,1)) +
+  #   labs(x = "Urbanization \n(% Impervious Surface)", y = "Occupancy", color = "Body \nMass \n(kg)") +
+  #   #gghighlight(species %in% c( "cottontail_desert", "mountain_lion", "bobcat", "jackrabbit_bt")) + 
+  #   theme(axis.text.x = element_text(face = "bold"), 
+  #         axis.text.y = element_text(face = "bold"), 
+  #         legend.position = "none",
+  #         legend.title = element_text(face = "bold"),
+  #         legend.text = element_text(face = "bold"),
+  #         axis.ticks = element_blank(),
+  #         axis.title.x = element_text(face = "bold", size = 18), 
+  #         axis.title.y = element_text(face = "bold", size = 18))
+  # plot.psi.urb
+  
   spp.plot <- c("coyote")
   # spp.plot <- c("kangaroo_rat")
   spp.plot <- names.short
