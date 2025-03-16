@@ -16,10 +16,8 @@ setwd("~/GitHub/metrophxwildlife-communitydynamics")
   
   # modeling packages
   library(jagsUI)
-  library(runjags)
   
   # visualization packages
-  library(flextable)
   library(ggplot2)
   library(gghighlight)
   library(viridis)

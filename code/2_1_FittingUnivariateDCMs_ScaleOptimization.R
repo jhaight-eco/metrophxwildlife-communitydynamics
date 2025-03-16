@@ -3,10 +3,7 @@ gc()
 
 
 library(jagsUI)
-library(rjags)
-#library(runjags)
 library(abind)
-
 library(dplyr)
 library(beepr)
 library(ggplot2)
@@ -209,7 +206,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -298,7 +295,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -387,7 +384,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -478,7 +475,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -567,7 +564,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -655,7 +652,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -743,7 +740,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -829,7 +826,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -916,7 +913,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -1005,7 +1002,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -1089,7 +1086,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -1175,7 +1172,7 @@ set.seed(54321)
     # n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')

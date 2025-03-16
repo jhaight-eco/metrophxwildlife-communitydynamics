@@ -153,7 +153,7 @@
   # fit model in JAGS, using 'jagsUI'
   (start.time <- Sys.time())
   m.sr <- jags(
-    model.file = "./code/jags/model_alphadiversity_multiseason.R",
+    model.file = "./code/2_3_model_alphadiversity_multiseason.R",
     data = bdata,
     n.chains = nc,
     parameters.to.save = c("beta", "re_sd"),

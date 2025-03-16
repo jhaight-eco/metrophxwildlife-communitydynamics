@@ -216,7 +216,7 @@ set.seed(54321)
     # Approximate run time: 20-30 min with 3k samples  
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')
@@ -338,7 +338,7 @@ set.seed(54321)
     # Approximate run time: 20-30 min with 3k samples
     (start.time <- Sys.time())
     out <- jags(bdata, inits, params, 
-                "./code/jags/model_DCM.R", 
+                "./code/2_0_model_DCM.R", 
                 n.adapt = na, n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, parallel = T) 
     (end.time <- Sys.time())
     elapsed.time <- difftime(end.time, start.time, units='mins')

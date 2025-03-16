@@ -7,9 +7,9 @@ This repository contains code and data used for fitting a dynamic community occu
 
 
 This `README` file includes information on the various scripts and datasets used for this analysis, though not every data source is saved in this repository due to data size limitations (the dynamic occupancy model output; GIS data). The manuscript includes citation of all locations from which environmental covariates were derived. This `README` file is organized into three sections corresponding to the three main folders into which the repository is organized
-3. [code](#code)  
-1. [data](#data)
-2. [figures](#figures)
+1. [code](#code)  
+2. [data](#data)
+3. [figures](#figures)
 
 Please direct all questions to Jeffrey Haight jdhaight.eco(at)gmail.com
 
@@ -37,16 +37,23 @@ This folder contains all .R script and RMarkdown (.rmd) files used for conductin
 Code was run using the following R packages:  
 | Package  | Version  |
 |---|---|
-| jagsUI | 1.5.2 |
-| dplyr | 1.0.8 |
-| beepr | 1.3 |
-| reshape2 | 1.4.4 |
-| ggplot2 | 3.3.5 |
-| [peRReo](https://github.com/jbgb13/peRReo) | 0.1.0 |
-| png | 0.1-7 |
-| scales | 1.2.0 |
-| gghighlight | 0.3.2 |
-| GGally | 2.1.2 |
+| jagsUI | 1.6.2 |
+|tidyverse| 2.0.0 |
+| dplyr | 1.1.4 |
+| beepr | 2.0 |
+| ggplot2 | 3.5.1 |
+| ggcorrplot | 0.1.4.1 |
+| gghighlight | 0.4.1 |
+| GGally | 2.2.1 |
+|ggrepel| 0.9.5 |
+|ggpubr| 0.6.0 |
+| png | 0.1-8 |
+| scales | 1.3.0 |
+|lterpalettefinder|1.1.0.900|
+|RColorBrewer| 1.1-3 |
+|viridis| 0.6.5 |
+
+
 
  
 
