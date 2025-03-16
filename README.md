@@ -111,7 +111,7 @@ An R object formatted as a four-dimensional (site X survey X season X species) a
 This folder contains all images utilized in the production of the manuscript figures. This folder includes visualizations produced using the R scripts (see **code** above). These visualizations were then combined within with one another within Inkscape (https://inkscape.org/) to create the figures in the published manuscript. 
 
 The `figures` folder also includes the subfolder **./figures/mammalgraphics** which contains image files used to represent mammals species in Figure 1 of the manuscript. All mammal graphics were sourced from PhyloPic (https://www.phylopic.org/) and were utilized as part of the public domain (https://creativecommons.org/publicdomain/zero/1.0/) or under the Creative Commons Attribution 3.0 license (https://creativecommons.org/licenses/by/3.0/). Mammal graphics are accompanied by the text file **./figures/mammalgraphics/imageattributions.txt**, which specifies each image's source and provides attribution for each image, as outlined below.
-| File Name  | Creative Commons License | Attribution  |  Link  |
+| File Name  | Creative Commons License | Attribution  |  Source  |
 |---|---|---|---|
 | Canis latrans  | CC0 1.0 Universal Public Domain Dedication   |  Margot Michaud  |  https://www.phylopic.org/images/5a0398e3-a455-4ca6-ba86-cf3f1b25977a/canis-latrans  |
 | Lepus americanus  | CC0 1.0 Universal Public Domain Dedication   | Maha Ghazal   | https://www.phylopic.org/images/8e61e166-11f4-4377-a923-9b5b597b6eba/lepus-americanus   |
@@ -121,7 +121,7 @@ The `figures` folder also includes the subfolder **./figures/mammalgraphics** wh
 | Pecari tajacu  | CC0 1.0 Universal Public Domain Dedication   |  Steven Traver  | http://phylopic.org/image/44fb7d4f-6d59-432b-9583-a87490259789/   |
 | Procyon lotor  | CC0 1.0 Universal Public Domain Dedication   |  Mathieu Basille  |  http://phylopic.org/image/e805d164-21e7-4657-979a-226f6ccc7f15/  |
 | Rodent, unknown  |  N/A  |  Kinley Ragan  |  Personal communication  |
-|  Urocyon cinereoargenteus |  Attribution 3.0 Unported | Brian Gratwicke (photo) and T. Michael Keesey (vectorization)   |  http://phylopic.org/image/20da6c7c-2584-4cee-921b-ebd09384567b/  |
+|  Urocyon cinereoargenteus | CC0 Attribution 3.0 Unported | Brian Gratwicke (photo) and T. Michael Keesey (vectorization)   |  http://phylopic.org/image/20da6c7c-2584-4cee-921b-ebd09384567b/  |
 
 ---
  
