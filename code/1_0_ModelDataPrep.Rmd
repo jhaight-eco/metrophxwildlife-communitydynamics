@@ -191,7 +191,8 @@ data.spp$name_short[which(data.spp$Species == "VUMA")] <- "kit_fox" # this speci
         
 # Common names for the species
   names.common <- data.spp$name
-  # names.short <- dimnames(y)[[4]]  # these are the names by which the occupancy data is alphabetized
+  dimnames(y)[[4]] # these are the names by which the occupancy data is alphabetized
+  # names.short <- dimnames(y)[[4]]  
   # names.short <- data.spp$name_short     # same thing
 
 # Vectorize phylogenetic structure
@@ -216,6 +217,9 @@ data.spp$name_short[which(data.spp$Species == "VUMA")] <- "kit_fox" # this speci
 
 
 data.spp %>% arrange(dietdiv)
+
+# we don't need the "t." objects anymore
+rm(t.classes, t.families, t.orders)
 
 # Look the collinearity of the species traits
 cor(data.spp$logmass, data.spp$dietdiv)   # -0.45 isn't too strong
