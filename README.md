@@ -54,6 +54,51 @@ Code was run using the following R packages:
 |viridis| 0.6.5 |
 
 
+---
+<div align="center"> <h3>data</h3> </div>
+This contains three subfolders with all the data files used for conducting the analyses and producing the `figures`:  
+**`model_inputs`**  
+**`model_outputs`**   
+**`model_summaries`** 
 
  
 
+Within **`model_inputs`**, there are five files:  
+
+**./data/model_inputs/arizonapalettes.Rdata**  
+Contains color palettes used for creating species richness figures. Colors were manually selected by Jeffrey Haight from personal photos of Arizona flora, including wildflowers, lichens, and mosses.
+
+**./data/model_inputs/covariates_50camsite.csv**
+
+
+
+**./data/model_inputs/EltonTraits_22mammalbird**    
+Contains data of species-level attributes, including each species' names, taxonomic groupings, and species traits (body mass, log-transformed as 'logmass'; carnivory). Species traits were derived from the EltonTraits 1.0 database (https://doi.org/10.1890/13-1917.1).
+
+ 
+
+**./data/model_inputs/ModelInputData_DCM.Rdata**  
+Contains all the cleaned datasets necessary for fitting the Bayesian multi-city community occupancy model, including the following R objects:  
+
+| Object Name	| Description   |
+|---------------------------|--------|
+| data_site	| A dataframe containing environmental variables at 50 wildlife camera sites in a wide tabular format (with seasonal variables as separate columns), including the modeled covariates of urbanization (e.g., `imp_1km`), patch diversity (e.g., `sdhi_5km`), and seasonal vegetation greenness (e.g., `ndvi_wd1km`, `ndvi_ww1km`, `ndvi_cw1km`) |
+| data_site	| A dataframe containing environmental variables at 50 wildlife camera sites in a long tabular format (with `season` and `scale` as variables), including the modeled covariates of urbanization (`imp`), patch diversity (`sdhi`), and vegetation greenness (`ndvi`) |
+| data.spp		| A dataframe of traits for the 20 focal mammal species (plus two ground-dwelling bird species), derived from the EltonTraits database (Wilman et al. 2016).	|
+| K 	        	| A matrix including the number of days in which each site was surveyed by camera traps during each season (max = 96 days), as well as total by-site sampling days across all seasons (`effort`) and standardized effort (`effort_std`)|
+| K.survey         	| A matrix including the number of repeat survey occassions at each site during each season (max = 6 surveys )	|
+| K.std         	| A matrix including the standardized by-site variable of sampling `effort`, used as a detection covariate in the fitting of occupancy models	|
+| n.season		| The number of sampling seasons|
+| n.site		| The number of sites surveyed in each season|
+| n.spp		| The number of species observed across all seasons	|
+| n.survey		| The number of survey occasions per season	|
+| names.common		| A vector of common names for each modeled species	|
+| spp.model		| A vector of shortened common names for each modeled species, the names by which species occurrence data was alphabetized	|
+| y	|A four-dimensional (site X survey X season X species) array of species detections (1 = detected, 0 = not detected), including only modeled species|
+| ysum	|A three-dimensional (site X season X species) array of species detections summed across surveys (max value = n.survey = 6). This is the occurrence dataset formatted for fitting the dynamic community occupancy model model (**./code/model_DCM.R**) using JAGS|
+
+Additional explanation of each R object is provided as comments within the script preparing the data (**./code/1_0_ModelDataPrep.R**).  
+ 
+
+**./data/model_inputs/y_s22j50_occ16day_3season.rds**  
+An R object formatted as a four-dimensional (site X survey X season X species) array of species detections (1 = detected, 0 = not detected). This precursory dataset includes additional species not modeled in the final analysis for this study (two ground-dwelling bird species), with the `y` object of **./data/model_inputs/ModelInputData_DCM.Rdata** containing only modeled species.   

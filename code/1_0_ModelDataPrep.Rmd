@@ -15,7 +15,7 @@ gc()
  
 ```{r packages, include = FALSE}
 library(abind)
-
+library(tidyverse)
 library(dplyr)
 library(ggplot2)
 library(ggrepel)
@@ -74,8 +74,7 @@ data.site <- read.csv("~/GitHub/metrophxwildlife-communitydynamics/data/model_in
   data.site$impquad1km  <- ((data.site$imp1km - mean(data.site$imp1km))/sd(data.site$imp1km))^2
   data.site$impquad5km  <- ((data.site$imp5km - mean(data.site$imp5km))/sd(data.site$imp5km))^2
 
-  # standardize all covariates by season
-  # some of these don't actually vary by season (e.g. imperviousness), but they can be standardized here anyway
+  # standardize non-seasonal covariates (e.g. imperviousness)
   data.site <- data.site %>%
           #group_by(season) %>%
           mutate(
@@ -87,72 +86,10 @@ data.site <- read.csv("~/GitHub/metrophxwildlife-communitydynamics/data/model_in
             sdhi5km_std = (sdhi5km - mean(sdhi5km))/sd(sdhi5km),
             pd100m_std = (pd100m - mean(pd100m))/sd(pd100m),
             pd1km_std = (pd1km - mean(pd1km))/sd(pd1km),
-            pd5km_std = (pd5km - mean(pd5km))/sd(pd5km),
-            #ndvi100m_std = (ndvi_100m - mean(ndvi_100m))/sd(ndvi_100m),
-            #ndvi1km_std = (ndvi_1km - mean(ndvi_1km))/sd(ndvi_1km),
-            #ndvi5km_std = (ndvi_5km - mean(ndvi_5km))/sd(ndvi_5km)#,
-            #ndvisd100m_std = (ndvi_sd_100m - mean(ndvi_sd_100m))/sd(ndvi_sd_100m),
-            #ndvisd1km_std = (ndvi_sd_1km - mean(ndvi_sd_1km))/sd(ndvi_sd_1km),
-            #ndvisd5km_std = (ndvi_sd_5km - mean(ndvi_sd_5km))/sd(ndvi_sd_5km),
-            #effort_std = (effort - mean(effort))/sd(effort)
+            pd5km_std = (pd5km - mean(pd5km))/sd(pd5km)
           )
 
-  # NDVI standardized across seasons
-  # For the DCMs, season is not treated as a fixed effect, so covariate effects are not assumed to be fixed
-  # i.e. we only get one beta estimate for psi1/phi/gamma across all the seasons, 
-  # so, for ease of interpretation time-varying variables should be standardized across seasons
-  # but, the model is structured to take these season-varying covariates in the form of a matrix
-  ndvi.100m.std <- data.site %>% 
-    transmute(
-      ndvi_wd_std = (ndvi_wd100m - mean(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m)))/sd(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m)),
-      ndvi_ww_std = (ndvi_ww100m - mean(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m)))/sd(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m)),
-      ndvi_cw_std = (ndvi_cw100m - mean(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m)))/sd(c(ndvi_wd100m, ndvi_ww100m, ndvi_cw100m))
-    )
-  mean(as.matrix(ndvi.100m.std))   # mean across seasons
-  mean(ndvi.100m.std[,1])
-  mean(ndvi.100m.std[,2])
-  mean(ndvi.100m.std[,3])
-  
-  ndvi.1km.std <- data.site %>% 
-    transmute(
-      ndvi_wd_std = (ndvi_wd1km - mean(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)))/sd(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)),
-      ndvi_ww_std = (ndvi_ww1km - mean(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)))/sd(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)),
-      ndvi_cw_std = (ndvi_cw1km - mean(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km)))/sd(c(ndvi_wd1km, ndvi_ww1km, ndvi_cw1km))
-    )
-  mean(ndvi.1km.std[,2])
-  mean(ndvi.1km.std[,3])
-  
-  ndvi.5km.std <- data.site %>% 
-    transmute(
-      ndvi_wd_std = (ndvi_wd5km - mean(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km)))/sd(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km)),
-      ndvi_ww_std = (ndvi_ww5km - mean(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km)))/sd(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km)),
-      ndvi_cw_std = (ndvi_cw5km - mean(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km)))/sd(c(ndvi_wd5km, ndvi_ww5km, ndvi_cw5km))
-    )
-  
-  mean(ndvi.5km.std[,1])
-  mean(ndvi.5km.std[,2])
-  mean(ndvi.5km.std[,3])
-  
-  # NDVI standardized by season
-  # for the meta-analysis model, season is a fixed effect (essentially on model for each season)
-    ndvi.100m.std.byseason <- data.site %>%
-      transmute(
-        ndvi_wd_std = (ndvi_wd100m - mean(ndvi_wd100m))/sd(ndvi_wd100m),
-        ndvi_ww_std = (ndvi_ww100m - mean(ndvi_ww100m))/sd(ndvi_ww100m),
-        ndvi_cw_std = (ndvi_cw100m - mean(ndvi_cw100m))/sd(ndvi_cw100m)
-      )
-    ndvi.1km.std.byseason <- data.site %>%
-      transmute(
-        ndvi_wd_std = (ndvi_wd1km - mean(ndvi_wd1km))/sd(ndvi_wd1km),
-        ndvi_ww_std = (ndvi_ww1km - mean(ndvi_ww1km))/sd(ndvi_ww1km),
-        ndvi_cw_std = (ndvi_cw1km - mean(ndvi_cw1km))/sd(ndvi_cw1km)
-      )
-    ndvi.5km.std.byseason <- data.site %>%
-      transmute(
-        ndvi_wd_std = (ndvi_wd5km - mean(ndvi_wd5km))/sd(ndvi_wd5km),
-        ndvi_ww_std = (ndvi_ww5km - mean(ndvi_ww5km))/sd(ndvi_ww5km),
-        ndvi_cw_std = (ndvi_cw5km - mean(ndvi_cw5km))/sd(ndvi_cw5km)
-      )
+ 
     
 # Standardize survey covariates 
     # similar to NDVI, there is only one beta across seasons
@@ -199,7 +136,9 @@ data.site.long$pd <- rep((data.site %>% select(site, pd100m, pd1km, pd5km) %>%
 
 
 
-# standardize again
+# standardize the variables by season 
+  # the model is structured to take these covariates in the form of a matrix, 
+  # but we will reformat it as such when we get to fitting the model.
 data.site.long <- data.site.long %>% mutate(
   imp_std = (imp - mean(imp, na.rm = TRUE))/sd(imp),
   ndvi_std = (ndvi - mean(ndvi, na.rm = TRUE))/sd(ndvi),
@@ -212,6 +151,7 @@ data.site.long$impquad <- data.site.long$imp_std^2
 
 data.site.long
 ```
+
 
 ```{r import species trait data}
 # Species Covariates
@@ -251,8 +191,8 @@ data.spp$name_short[which(data.spp$Species == "VUMA")] <- "kit_fox" # this speci
         
 # Common names for the species
   names.common <- data.spp$name
-  names.short <- dimnames(y)[[4]]  # these are the names by which the occupancy data is alphabetized
-  names.short <- data.spp$name_short     # same thing
+  # names.short <- dimnames(y)[[4]]  # these are the names by which the occupancy data is alphabetized
+  # names.short <- data.spp$name_short     # same thing
 
 # Vectorize phylogenetic structure
   # we need a vector of integers (length = # of species), where each number corresponds to the taxon
@@ -310,7 +250,7 @@ rm(ysum01)
 save.image("~/GitHub/metrophxwildlife-communitydynamics/data/model_inputs/ModelInputData_DCM.RData")
 ```
 
-# Visualize Naive (Observed) Species Richness vs. Environmental Covariates
+# BONUS: Visualize Naive (Observed) Species Richness vs. Environmental Covariates
 This is mainly as a preview of the relationships that will be assessed once imperfect detection has been accounted for in the estimates of species richness. Since these are pairwise correlations, the collinearity among the covariates is not being accounted for and these should be taken with a big grain of salt. For instance, vegetation greenness is negatively related to urbanization in the cool-wet season. Certain relationships might not show as substantial (e.g., richness vs. heterogeneity) because they are being overshadowed by the stronger relationships (e.g., richness vs. urbanization).
 
 ### Richness vs. Urbanization
@@ -370,3 +310,4 @@ cor(data.site$ndvi_wd1km, data.site$rich_obs_wd)
 cor(data.site$ndvi_ww1km, data.site$rich_obs_ww)
 cor(data.site$ndvi_cw1km, data.site$rich_obs_cw)
 ```
+
