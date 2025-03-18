@@ -1,4 +1,4 @@
-# metrophxwildlife-communitydynamics
+[![DOI](https://zenodo.org/badge/631009107.svg)](https://doi.org/10.5281/zenodo.15043780)
 
 # A repository for:
 Haight, J. D.,; S. J. Hall; J. S. Lewis. Landscape modification and species traits shape seasonal wildlife community dynamics within an arid metropolitan region
